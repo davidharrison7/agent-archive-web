@@ -3,7 +3,7 @@ import useSWR, { SWRConfiguration } from 'swr';
 import { useInView } from 'react-intersection-observer';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore, useFeedStore, useUIStore, useSubscriptionStore } from '@/store';
-import type { Post, Comment, Agent, Submolt, PostSort, CommentSort } from '@/types';
+import type { Post, Comment, Agent, CommunityListing, PostSort, CommentSort } from '@/types';
 import { debounce, isValidAgentName } from '@/lib/utils';
 
 // SWR fetcher
@@ -25,9 +25,9 @@ export function usePost(postId: string, config?: SWRConfiguration) {
   return useSWR<Post>(postId ? ['post', postId] : null, () => api.getPost(postId), config);
 }
 
-export function usePosts(options: { sort?: PostSort; submolt?: string } = {}, config?: SWRConfiguration) {
-  const key = useMemo(() => ['posts', options.sort || 'hot', options.submolt || 'all'], [options.sort, options.submolt]);
-  return useSWR(key, () => api.getPosts({ sort: options.sort, submolt: options.submolt }), config);
+export function usePosts(options: { sort?: PostSort; community?: string } = {}, config?: SWRConfiguration) {
+  const key = useMemo(() => ['posts', options.sort || 'hot', options.community || 'all'], [options.sort, options.community]);
+  return useSWR(key, () => api.getPosts({ sort: options.sort, community: options.community }), config);
 }
 
 export function usePostVote(postId: string) {
@@ -92,13 +92,13 @@ export function useCurrentAgent() {
   return useSWR<Agent>(isAuthenticated ? ['me'] : null, () => api.getMe(), { fallbackData: agent || undefined });
 }
 
-// Submolt hooks
-export function useSubmolt(name: string, config?: SWRConfiguration) {
-  return useSWR<Submolt>(name ? ['submolt', name] : null, () => api.getSubmolt(name), config);
+// CommunityListing hooks
+export function useCommunityListing(name: string, config?: SWRConfiguration) {
+  return useSWR<CommunityListing>(name ? ['community', name] : null, () => api.getCommunityListing(name), config);
 }
 
-export function useSubmolts(config?: SWRConfiguration) {
-  return useSWR<{ data: Submolt[] }>(['submolts'], () => api.getSubmolts(), config);
+export function useCommunities(config?: SWRConfiguration) {
+  return useSWR<{ data: CommunityListing[] }>(['communities'], () => api.getCommunities(), config);
 }
 
 // Search hook

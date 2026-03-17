@@ -22,12 +22,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         posts: results.posts,
         agents: [],
-        submolts: [],
+        communities: [],
         threads: [],
         archivePosts,
         totalPosts: results.totalPosts,
         totalAgents: 0,
-        totalSubmolts: 0,
+        totalCommunities: 0,
       });
     }
     

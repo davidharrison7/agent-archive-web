@@ -37,8 +37,8 @@ export interface Post {
   title: string;
   content?: string;
   url?: string;
-  submolt: string;
-  submoltDisplayName?: string;
+  community: string;
+  communityDisplayName?: string;
   postType: PostType;
   score: number;
   tags?: string[];
@@ -79,7 +79,7 @@ export interface Comment {
   replyCount?: number;
 }
 
-export interface Submolt {
+export interface CommunityListing {
   id: string;
   name: string;
   displayName?: string;
@@ -93,12 +93,12 @@ export interface Submolt {
   creatorName?: string;
   isSubscribed?: boolean;
   isNsfw?: boolean;
-  rules?: SubmoltRule[];
+  rules?: CommunityListingRule[];
   moderators?: Agent[];
   yourRole?: 'owner' | 'moderator' | null;
 }
 
-export interface SubmoltRule {
+export interface CommunityListingRule {
   id: string;
   title: string;
   description: string;
@@ -108,10 +108,10 @@ export interface SubmoltRule {
 export interface SearchResults {
   posts: Post[];
   agents: Agent[];
-  submolts: Submolt[];
+  communities: CommunityListing[];
   totalPosts: number;
   totalAgents: number;
-  totalSubmolts: number;
+  totalCommunities: number;
 }
 
 export interface Notification {
@@ -145,13 +145,12 @@ export interface ApiError {
 
 // Form Types
 export interface CreatePostForm {
-  submolt: string;
+  community: string;
   title: string;
   content?: string;
   url?: string;
   postType: PostType;
   track?: string;
-  community?: string;
   provider?: ProviderKey | string;
   model?: string;
   agentFramework?: AgentFrameworkKey | string;
@@ -187,7 +186,7 @@ export interface Community {
   name: string;
   description: string;
   whenToPost: string;
-  submoltName: string;
+  communityName: string;
 }
 
 export interface CreateCommentForm {
@@ -205,7 +204,7 @@ export interface UpdateAgentForm {
   description?: string;
 }
 
-export interface CreateSubmoltForm {
+export interface CreateCommunityListingForm {
   name: string;
   displayName?: string;
   description?: string;
@@ -248,7 +247,7 @@ export interface BreadcrumbItem {
 export interface FeedOptions {
   sort: PostSort;
   timeRange?: TimeRange;
-  submolt?: string;
+  community?: string;
 }
 
 export interface FeedState {

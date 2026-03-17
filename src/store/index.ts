@@ -68,14 +68,14 @@ interface FeedStore {
   posts: Post[];
   sort: PostSort;
   timeRange: TimeRange;
-  submolt: string | null;
+  community: string | null;
   isLoading: boolean;
   hasMore: boolean;
   offset: number;
   
   setSort: (sort: PostSort) => void;
   setTimeRange: (timeRange: TimeRange) => void;
-  setSubmolt: (submolt: string | null) => void;
+  setCommunityListing: (community: string | null) => void;
   loadPosts: (reset?: boolean) => Promise<void>;
   loadMore: () => Promise<void>;
   updatePostVote: (postId: string, vote: 'up' | 'down' | null, scoreDiff: number) => void;
@@ -85,7 +85,7 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
   posts: [],
   sort: 'hot',
   timeRange: 'day',
-  submolt: null,
+  community: null,
   isLoading: false,
   hasMore: true,
   offset: 0,
@@ -100,20 +100,20 @@ export const useFeedStore = create<FeedStore>((set, get) => ({
     get().loadPosts(true);
   },
   
-  setSubmolt: (submolt) => {
-    set({ submolt, posts: [], offset: 0, hasMore: true });
+  setCommunityListing: (community) => {
+    set({ community, posts: [], offset: 0, hasMore: true });
     get().loadPosts(true);
   },
   
   loadPosts: async (reset = false) => {
-    const { sort, timeRange, submolt, isLoading } = get();
+    const { sort, timeRange, community, isLoading } = get();
     if (isLoading) return;
     
     set({ isLoading: true });
     try {
       const offset = reset ? 0 : get().offset;
-      const response = submolt 
-        ? await api.getSubmoltFeed(submolt, { sort, limit: 25, offset })
+      const response = community 
+        ? await api.getCommunityListingFeed(community, { sort, limit: 25, offset })
         : await api.getPosts({ sort, timeRange, limit: 25, offset });
       
       set({
@@ -214,7 +214,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
 
 // Subscriptions Store
 interface SubscriptionStore {
-  subscribedSubmolts: string[];
+  subscribedCommunities: string[];
   addSubscription: (name: string) => void;
   removeSubscription: (name: string) => void;
   isSubscribed: (name: string) => boolean;
@@ -223,19 +223,19 @@ interface SubscriptionStore {
 export const useSubscriptionStore = create<SubscriptionStore>()(
   persist(
     (set, get) => ({
-      subscribedSubmolts: [],
+      subscribedCommunities: [],
       
       addSubscription: (name) => {
-        if (!get().subscribedSubmolts.includes(name)) {
-          set({ subscribedSubmolts: [...get().subscribedSubmolts, name] });
+        if (!get().subscribedCommunities.includes(name)) {
+          set({ subscribedCommunities: [...get().subscribedCommunities, name] });
         }
       },
       
       removeSubscription: (name) => {
-        set({ subscribedSubmolts: get().subscribedSubmolts.filter(s => s !== name) });
+        set({ subscribedCommunities: get().subscribedCommunities.filter(s => s !== name) });
       },
       
-      isSubscribed: (name) => get().subscribedSubmolts.includes(name),
+      isSubscribed: (name) => get().subscribedCommunities.includes(name),
     }),
     { name: 'agentarchive-subscriptions' }
   )

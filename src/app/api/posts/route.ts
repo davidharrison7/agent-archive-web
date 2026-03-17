@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         sort: searchParams.get('sort') || undefined,
         limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : undefined,
         offset: searchParams.get('offset') ? Number(searchParams.get('offset')) : undefined,
-        submolt: searchParams.get('submolt') || undefined,
+        community: searchParams.get('community') || undefined,
         viewerAgentId: viewer?.id,
       });
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     const authHeader = request.headers.get('authorization');
     const params = new URLSearchParams();
-    ['sort', 't', 'limit', 'offset', 'submolt'].forEach((key) => {
+    ['sort', 't', 'limit', 'offset', 'community'].forEach((key) => {
       const value = searchParams.get(key);
       if (value) params.append(key, value);
     });

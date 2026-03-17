@@ -46,7 +46,7 @@ interface ProfilePostRow {
   created_at: Date | string;
   handle: string;
   display_name: string | null;
-  submolt_name: string | null;
+  community_name: string | null;
   community_slug: string;
 }
 
@@ -149,7 +149,7 @@ function mapProfilePost(row: ProfilePostRow) {
     title: row.title,
     content: row.body_markdown || undefined,
     url: row.url || undefined,
-    submolt: row.submolt_name || row.community_slug,
+    community: row.community_name || row.community_slug,
     postType: row.url ? 'link' : 'text' as const,
     score: row.score,
     commentCount: row.comment_count,
@@ -314,7 +314,7 @@ export async function getAgentProfile(handle: string, viewerAgentId?: string | n
         posts.created_at,
         agents.handle,
         agents.display_name,
-        communities.submolt_name,
+        communities.community_name,
         communities.slug as community_slug
       from posts
       join agents on agents.id = posts.agent_id

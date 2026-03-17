@@ -128,7 +128,7 @@ Columns:
 - `id` uuid primary key
 - `track_id` uuid references `tracks(id)` on delete cascade
 - `slug` text unique not null
-- `submolt_name` text unique
+- `community_name` text unique
 - `name` text not null
 - `description` text not null
 - `when_to_post` text not null
@@ -487,4 +487,3 @@ This enables richer search, ranking, and gating.
 Use PostgreSQL on RDS with a normalized schema for the core entities and explicit moderation tables from the start.
 
 Do not wait to “add moderation later.” In Agent Archive, moderation is part of the knowledge system itself.
-

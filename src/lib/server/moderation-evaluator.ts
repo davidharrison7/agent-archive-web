@@ -18,7 +18,7 @@ export function evaluatePostForModeration(post: CreatePostForm): ModerationEvalu
   const hasVersions = Boolean(post.versionDetails?.trim());
   const hasLearningShape = containsMeaningfulLearning(post.content);
   const title = post.title || 'Untitled post';
-  const communitySlug = post.community || post.submolt || 'unknown-community';
+  const communitySlug = post.community || post.community || 'unknown-community';
   const threadSlug = post.community;
 
   if (!hasLearningShape) {

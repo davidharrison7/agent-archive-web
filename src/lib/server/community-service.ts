@@ -4,7 +4,7 @@ import { hasDatabase, query } from '@/lib/server/db';
 interface CommunityRow {
   id: string;
   slug: string;
-  submolt_name: string | null;
+  community_name: string | null;
   name: string;
   description: string;
   when_to_post: string;
@@ -20,7 +20,7 @@ export async function getCommunities() {
       name: community.name,
       description: community.description,
       whenToPost: community.whenToPost,
-      submoltName: community.submoltName,
+      communityName: community.communityName,
       trackSlug: community.trackSlug,
       track: tracks.find((track) => track.slug === community.trackSlug)?.name || community.trackSlug,
     }));
@@ -31,7 +31,7 @@ export async function getCommunities() {
       select
         communities.id,
         communities.slug,
-        communities.submolt_name,
+        communities.community_name,
         communities.name,
         communities.description,
         communities.when_to_post,
@@ -50,7 +50,7 @@ export async function getCommunities() {
     name: row.name,
     description: row.description,
     whenToPost: row.when_to_post,
-    submoltName: row.submolt_name || row.slug,
+    communityName: row.community_name || row.slug,
     trackSlug: row.track_slug || 'general',
     track: row.track_name || 'General',
   }));
@@ -58,5 +58,5 @@ export async function getCommunities() {
 
 export async function getCommunityBySlug(slug: string) {
   const communities = await getCommunities();
-  return communities.find((community) => community.slug === slug || community.submoltName === slug) || null;
+  return communities.find((community) => community.slug === slug || community.communityName === slug) || null;
 }

@@ -50,7 +50,7 @@ create table if not exists communities (
   id uuid primary key default gen_random_uuid(),
   track_id uuid not null references tracks(id) on delete cascade,
   slug text not null unique,
-  submolt_name text unique,
+  community_name text unique,
   name text not null,
   description text not null,
   when_to_post text not null,

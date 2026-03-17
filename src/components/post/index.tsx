@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { cn, formatScore, formatRelativeTime, extractDomain, truncate, getInitials, getPostUrl, getSubmoltUrl, getAgentUrl } from '@/lib/utils';
+import { cn, formatScore, formatRelativeTime, extractDomain, truncate, getInitials, getPostUrl, getCommunityListingUrl, getAgentUrl } from '@/lib/utils';
 import { usePostVote, useAuth } from '@/hooks';
 import { useUIStore } from '@/store';
 import { Button, Avatar, AvatarImage, AvatarFallback, Card, Skeleton, Badge } from '@/components/ui';
@@ -13,11 +13,11 @@ import { MODERATION_RULES } from '@/lib/constants';
 interface PostCardProps {
   post: Post;
   isCompact?: boolean;
-  showSubmolt?: boolean;
+  showCommunityListing?: boolean;
   onVote?: (direction: 'up' | 'down') => void;
 }
 
-export function PostCard({ post, isCompact = false, showSubmolt = true, onVote }: PostCardProps) {
+export function PostCard({ post, isCompact = false, showCommunityListing = true, onVote }: PostCardProps) {
   const { isAuthenticated } = useAuth();
   const { vote, isVoting } = usePostVote(post.id);
   const [showMenu, setShowMenu] = React.useState(false);
@@ -62,10 +62,10 @@ export function PostCard({ post, isCompact = false, showSubmolt = true, onVote }
         <div className="flex-1 min-w-0">
           {/* Meta */}
           <div className="post-meta mb-1 flex-wrap">
-            {showSubmolt && (
+            {showCommunityListing && (
               <>
-                <Link href={getSubmoltUrl(post.submolt)} className="submolt-badge">
-                  m/{post.submolt}
+                <Link href={getCommunityListingUrl(post.community)} className="community-badge">
+                  c/{post.community}
                 </Link>
                 <span>•</span>
               </>
@@ -83,7 +83,7 @@ export function PostCard({ post, isCompact = false, showSubmolt = true, onVote }
           </div>
           
           {/* Title */}
-          <Link href={getPostUrl(post.id, post.submolt)}>
+          <Link href={getPostUrl(post.id, post.community)}>
             <h3 className={cn('post-title', isCompact ? 'text-base' : 'text-lg')}>
               {post.title}
               {domain && (
@@ -114,7 +114,7 @@ export function PostCard({ post, isCompact = false, showSubmolt = true, onVote }
           
           {/* Actions */}
           <div className="flex items-center gap-1 mt-3">
-            <Link href={getPostUrl(post.id, post.submolt)} className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors">
+            <Link href={getPostUrl(post.id, post.community)} className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors">
               <MessageSquare className="h-4 w-4" />
               <span>{post.commentCount} comments</span>
             </Link>
@@ -155,7 +155,7 @@ export function PostCard({ post, isCompact = false, showSubmolt = true, onVote }
 }
 
 // Post List
-export function PostList({ posts, isLoading, showSubmolt = true }: { posts: Post[]; isLoading?: boolean; showSubmolt?: boolean }) {
+export function PostList({ posts, isLoading, showCommunityListing = true }: { posts: Post[]; isLoading?: boolean; showCommunityListing?: boolean }) {
   const visiblePosts = posts.filter((post) => post.score > MODERATION_RULES.HIDE_POST_SCORE_THRESHOLD);
 
   if (isLoading) {
@@ -179,7 +179,7 @@ export function PostList({ posts, isLoading, showSubmolt = true }: { posts: Post
   return (
     <div className="space-y-4">
       {visiblePosts.map(post => (
-        <PostCard key={post.id} post={post} showSubmolt={showSubmolt} />
+        <PostCard key={post.id} post={post} showCommunityListing={showCommunityListing} />
       ))}
     </div>
   );
@@ -244,7 +244,7 @@ export function FeedSortTabs({ value, onChange }: { value: string; onChange: (va
 }
 
 // Create Post Card
-export function CreatePostCard({ submolt }: { submolt?: string }) {
+export function CreatePostCard({ community }: { community?: string }) {
   const { agent, isAuthenticated } = useAuth();
   const { openCreatePost } = useUIStore();
   

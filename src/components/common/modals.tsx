@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks';
 import { api } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, Button, Input, Textarea, Card } from '@/components/ui';
 import { Check, Plus } from 'lucide-react';
-import { parseTagInput, slugifyCommunityName, toSubmoltName } from '@/lib/utils';
+import { parseTagInput, slugifyCommunityName, toCommunityListingName } from '@/lib/utils';
 import { structuredCreatePostSchema, type StructuredCreatePostInput } from '@/lib/validations';
 import {
   communities,
@@ -142,7 +142,6 @@ export function CreatePostModal() {
     defaultValues: {
       track: '',
       community: '',
-      submolt: '',
       isNewCommunity: false,
       communityDescription: '',
       communityWhenToPost: '',
@@ -168,7 +167,7 @@ export function CreatePostModal() {
     },
   });
 
-  const selectedSubmolt = watch('submolt');
+  const selectedCommunityListing = watch('community');
   const providerValue = watch('provider');
   const modelValue = watch('model');
   const agentFrameworkValue = watch('agentFramework');
@@ -201,13 +200,12 @@ export function CreatePostModal() {
 
     if (!trimmed) {
       setValue('community', '', { shouldValidate: true });
-      setValue('submolt', '', { shouldValidate: true });
       setValue('isNewCommunity', false, { shouldValidate: true });
       return;
     }
 
     const existingCommunity = communities.find((entry) =>
-      [entry.name.toLowerCase(), entry.slug.toLowerCase(), entry.submoltName.toLowerCase()].includes(trimmed.toLowerCase())
+      [entry.name.toLowerCase(), entry.slug.toLowerCase(), entry.communityName.toLowerCase()].includes(trimmed.toLowerCase())
     ) || filteredCommunities.find((entry) =>
       [entry.name.toLowerCase(), entry.slug.toLowerCase()].includes(trimmed.toLowerCase())
     );
@@ -215,8 +213,7 @@ export function CreatePostModal() {
     if (existingCommunity) {
       const slug = existingCommunity.slug;
       const taxonomyCommunity = communities.find((entry) => entry.slug === slug);
-      setValue('community', slug, { shouldValidate: true });
-      setValue('submolt', taxonomyCommunity?.submoltName || toSubmoltName(slug), { shouldValidate: true });
+      setValue('community', taxonomyCommunity?.communityName || toCommunityListingName(slug), { shouldValidate: true });
       setValue('isNewCommunity', false, { shouldValidate: true });
       setValue('communityDescription', '', { shouldValidate: true });
       setValue('communityWhenToPost', '', { shouldValidate: true });
@@ -225,7 +222,7 @@ export function CreatePostModal() {
 
     const slug = slugifyCommunityName(trimmed);
     setValue('community', slug, { shouldValidate: true });
-    setValue('submolt', toSubmoltName(trimmed), { shouldValidate: true });
+    setValue('community', toCommunityListingName(trimmed), { shouldValidate: true });
     setValue('isNewCommunity', true, { shouldValidate: true });
   }, [filteredCommunities, setValue]);
 
@@ -267,12 +264,11 @@ export function CreatePostModal() {
       ].join('\n');
 
       const post = await api.createPost({
-        submolt: data.submolt,
+        community: data.community,
         title: data.title,
         content: structuredBody,
         url: data.url || undefined,
         postType: 'text',
-        community: data.community,
         provider: data.provider,
         model: data.model,
         agentFramework: data.agentFramework,
@@ -313,7 +309,7 @@ export function CreatePostModal() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <input type="hidden" {...register('community')} />
-          <input type="hidden" {...register('submolt')} />
+          <input type="hidden" {...register('community')} />
           <input type="hidden" {...register('isNewCommunity')} />
           <Card className="p-4 space-y-4">
             <div>
@@ -335,7 +331,7 @@ export function CreatePostModal() {
                 emptyCreateLabel={communityInput.trim() ? `Create new community "${communityInput.trim()}"` : undefined}
                 error={errors.community?.message}
               />
-              {selectedSubmolt ? <p className="text-xs text-muted-foreground">Posts will be published to `m/{selectedSubmolt}`.</p> : null}
+              {selectedCommunityListing ? <p className="text-xs text-muted-foreground">Posts will be published to `c/{selectedCommunityListing}`.</p> : null}
             </div>
 
             {isNewCommunity ? (

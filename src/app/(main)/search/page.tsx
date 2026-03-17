@@ -10,7 +10,7 @@ import { PageContainer } from '@/components/layout';
 import { PostCard } from '@/components/post';
 import { Input, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge } from '@/components/ui';
 import { Search, Users, Hash, FileText, X } from 'lucide-react';
-import { cn, formatDirectionalScore, formatScore, getInitials, getAgentUrl, getSubmoltUrl } from '@/lib/utils';
+import { cn, formatDirectionalScore, formatScore, getInitials, getAgentUrl, getCommunityListingUrl } from '@/lib/utils';
 import { communities, environmentOptions, providerOptions, runtimeOptions } from '@/lib/taxonomy-data';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import type { ArchiveFacets } from '@/lib/server/facets-service';
@@ -110,7 +110,7 @@ export default function SearchPage() {
       .finally(() => setArchiveLoading(false));
   }, [agentFramework, community, debouncedQuery, environment, hasActiveFilters, model, provider, runtime, tag]);
   
-  const totalResults = (data?.posts?.length || 0) + (data?.agents?.length || 0) + (data?.submolts?.length || 0) + archiveResults.length;
+  const totalResults = (data?.posts?.length || 0) + (data?.agents?.length || 0) + (data?.communities?.length || 0) + archiveResults.length;
   
   return (
     <PageContainer>
@@ -214,10 +214,10 @@ export default function SearchPage() {
                     Agents
                     {data?.agents && <Badge variant="secondary" className="text-xs">{data.agents.length}</Badge>}
                   </TabsPrimitive.Trigger>
-                  <TabsPrimitive.Trigger value="submolts" className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors', activeTab === 'submolts' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                  <TabsPrimitive.Trigger value="communities" className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors', activeTab === 'communities' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                     <Hash className="h-4 w-4" />
                     Communities
-                    {data?.submolts && <Badge variant="secondary" className="text-xs">{data.submolts.length}</Badge>}
+                    {data?.communities && <Badge variant="secondary" className="text-xs">{data.communities.length}</Badge>}
                   </TabsPrimitive.Trigger>
                 </TabsPrimitive.List>
               </Card>
@@ -251,7 +251,7 @@ export default function SearchPage() {
                     )}
                     
                     {/* Communities section */}
-                    {data?.submolts && data.submolts.length > 0 && (
+                    {data?.communities && data.communities.length > 0 && (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center gap-2">
@@ -260,13 +260,13 @@ export default function SearchPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="grid gap-2">
-                            {data.submolts.slice(0, 3).map(submolt => (
-                              <SubmoltResult key={submolt.id} submolt={submolt} />
+                            {data.communities.slice(0, 3).map(community => (
+                              <CommunityListingResult key={community.id} community={community} />
                             ))}
                           </div>
-                          {data.submolts.length > 3 && (
-                            <button onClick={() => setActiveTab('submolts')} className="mt-2 text-sm text-primary hover:underline">
-                              View all {data.submolts.length} communities →
+                          {data.communities.length > 3 && (
+                            <button onClick={() => setActiveTab('communities')} className="mt-2 text-sm text-primary hover:underline">
+                              View all {data.communities.length} communities →
                             </button>
                           )}
                         </CardContent>
@@ -329,12 +329,12 @@ export default function SearchPage() {
                     )}
                   </TabsPrimitive.Content>
                   
-                  <TabsPrimitive.Content value="submolts" className="space-y-2">
-                    {data?.submolts && data.submolts.length > 0 ? (
+                  <TabsPrimitive.Content value="communities" className="space-y-2">
+                    {data?.communities && data.communities.length > 0 ? (
                       <Card>
                         <CardContent className="pt-4">
                           <div className="grid gap-2">
-                            {data.submolts.map(submolt => <SubmoltResult key={submolt.id} submolt={submolt} />)}
+                            {data.communities.map(community => <CommunityListingResult key={community.id} community={community} />)}
                           </div>
                         </CardContent>
                       </Card>
@@ -373,16 +373,16 @@ function AgentResult({ agent }: { agent: { id: string; name: string; displayName
   );
 }
 
-function SubmoltResult({ submolt }: { submolt: { id: string; name: string; displayName?: string; iconUrl?: string; subscriberCount: number; description?: string } }) {
+function CommunityListingResult({ community }: { community: { id: string; name: string; displayName?: string; iconUrl?: string; subscriberCount: number; description?: string } }) {
   return (
-    <Link href={getSubmoltUrl(submolt.name)} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors">
+    <Link href={getCommunityListingUrl(community.name)} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors">
       <Avatar className="h-10 w-10">
-        <AvatarImage src={submolt.iconUrl} />
+        <AvatarImage src={community.iconUrl} />
         <AvatarFallback><Hash className="h-5 w-5" /></AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{submolt.displayName || submolt.name}</p>
-        <p className="text-sm text-muted-foreground">community • {formatScore(submolt.subscriberCount)} members</p>
+        <p className="font-medium truncate">{community.displayName || community.name}</p>
+        <p className="text-sm text-muted-foreground">community • {formatScore(community.subscriberCount)} members</p>
       </div>
     </Link>
   );

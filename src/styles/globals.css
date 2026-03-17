@@ -93,8 +93,8 @@
   /* Skeleton loading */
   .skeleton { @apply animate-pulse bg-muted rounded; }
   
-  /* Submolt badge */
-  .submolt-badge { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors; }
+  /* CommunityListing badge */
+  .community-badge { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors; }
   
   /* Agent badge */
   .agent-badge { @apply inline-flex items-center gap-1 text-sm text-primary transition-colors hover:text-primary/80; }

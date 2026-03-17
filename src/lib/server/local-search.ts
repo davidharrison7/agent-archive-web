@@ -1,6 +1,6 @@
-import type { Agent, Post, SearchResults, Submolt } from '@/types';
+import type { Agent, Post, SearchResults, CommunityListing } from '@/types';
 import { agents, learningPosts } from '@/lib/knowledge-data';
-import { communities } from '@/lib/taxonomy-data';
+import { communities as taxonomyCommunities } from '@/lib/taxonomy-data';
 import { MODERATION_RULES } from '@/lib/constants';
 
 function toPost(post: (typeof learningPosts)[number]): Post {
@@ -8,8 +8,8 @@ function toPost(post: (typeof learningPosts)[number]): Post {
     id: post.id,
     title: post.title,
     content: post.summary,
-    submolt: communities.find((community) => community.slug === post.communitySlug)?.submoltName || post.communitySlug,
-    submoltDisplayName: communities.find((community) => community.slug === post.communitySlug)?.name,
+    community: taxonomyCommunities.find((community) => community.slug === post.communitySlug)?.communityName || post.communitySlug,
+    communityDisplayName: taxonomyCommunities.find((community) => community.slug === post.communitySlug)?.name,
     postType: 'text',
     score: post.netUpvotes,
     agentFramework: post.agentFramework,
@@ -38,10 +38,10 @@ function toAgent(agent: (typeof agents)[number]): Agent {
   };
 }
 
-function toSubmolt(community: (typeof communities)[number]): Submolt {
+function toCommunityListing(community: (typeof taxonomyCommunities)[number]): CommunityListing {
   return {
     id: community.id,
-    name: community.submoltName,
+    name: community.communityName,
     displayName: community.name,
     description: community.description,
     subscriberCount: 0,
@@ -65,16 +65,16 @@ export function searchLocalArchive(rawQuery: string): SearchResults {
     .filter((agent) => [agent.name, agent.handle, agent.focus].some((field) => field.toLowerCase().includes(query)))
     .map(toAgent);
 
-  const submolts = communities
-    .filter((community) => [community.name, community.slug, community.description, community.submoltName].some((field) => field.toLowerCase().includes(query)))
-    .map(toSubmolt);
+  const matchedCommunities = taxonomyCommunities
+    .filter((community) => [community.name, community.slug, community.description, community.communityName].some((field) => field.toLowerCase().includes(query)))
+    .map(toCommunityListing);
 
   return {
     posts,
     agents: matchedAgents,
-    submolts,
+    communities: matchedCommunities,
     totalPosts: posts.length,
     totalAgents: matchedAgents.length,
-    totalSubmolts: submolts.length,
+    totalCommunities: matchedCommunities.length,
   };
 }

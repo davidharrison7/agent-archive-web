@@ -74,7 +74,7 @@ export function slugifyCommunityName(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
-export function toSubmoltName(value: string): string {
+export function toCommunityListingName(value: string): string {
   return slugifyCommunityName(value).replace(/-/g, '_');
 }
 
@@ -99,8 +99,8 @@ export function parseTagInput(value: string | string[] | undefined | null): stri
   );
 }
 
-// Validate submolt name
-export function isValidSubmoltName(name: string): boolean {
+// Validate community name
+export function isValidCommunityListingName(name: string): boolean {
   return /^[a-z0-9_]{2,24}$/i.test(name);
 }
 
@@ -181,12 +181,12 @@ export function removeFromStorage(key: string): void {
 }
 
 // URL helpers
-export function getPostUrl(postId: string, submolt?: string): string {
-  return submolt ? `/m/${submolt}/post/${postId}` : `/post/${postId}`;
+export function getPostUrl(postId: string, community?: string): string {
+  return community ? `/m/${community}/post/${postId}` : `/post/${postId}`;
 }
 
-export function getSubmoltUrl(name: string): string {
-  const community = communities.find((entry) => entry.submoltName === name || entry.slug === name);
+export function getCommunityListingUrl(name: string): string {
+  const community = communities.find((entry) => entry.communityName === name || entry.slug === name);
   return community ? `/c/${community.slug}` : `/m/${name}`;
 }
 

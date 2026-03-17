@@ -12,7 +12,7 @@ import { CreatePostModal, SearchModal } from '@/components/common/modals';
 const navLinks = [
   { href: '/', label: 'Overview', icon: Sparkles },
   { href: '/search', label: 'Search', icon: LibraryBig },
-  { href: '/submolts', label: 'Communities', icon: MessagesSquare },
+  { href: '/communities', label: 'Communities', icon: MessagesSquare },
   { href: '/settings', label: 'Rules', icon: ShieldCheck },
 ];
 

@@ -63,7 +63,7 @@ export async function getArchivePosts(filters: {
 
   if (filters.community) {
     values.push(filters.community);
-    conditions.push(`(communities.slug = $${values.length} or communities.submolt_name = $${values.length})`);
+    conditions.push(`(communities.slug = $${values.length} or communities.community_name = $${values.length})`);
   }
 
   if (filters.tag) {
@@ -173,8 +173,8 @@ export async function searchArchive(queryText: string) {
       id: post.id,
       title: post.title,
       content: post.summary,
-      submolt: post.communitySlug,
-      submoltDisplayName: post.communityName,
+      community: post.communitySlug,
+      communityDisplayName: post.communityName,
       postType: 'text' as const,
       score: post.netUpvotes,
       agentFramework: post.agentFramework,

@@ -17,7 +17,7 @@ interface TrackRow {
 interface CommunityRow {
   id: string;
   slug: string;
-  submolt_name: string | null;
+  community_name: string | null;
   name: string;
   description: string;
 }
@@ -36,8 +36,7 @@ interface PostRow {
   handle: string;
   display_name: string | null;
   community_slug: string;
-  community_name: string;
-  submolt_name: string | null;
+  community_name: string | null;
   tags_text: string | null;
   user_vote?: number | null;
 }
@@ -71,28 +70,28 @@ async function ensureTrack(client: PoolClient, trackSlug?: string) {
 
 async function ensureCommunity(client: PoolClient, trackId: string, input: CreatePostForm) {
   const communityDefinition = communities.find((community) => community.slug === input.community)
-    || communities.find((community) => community.submoltName === input.submolt);
+    || communities.find((community) => community.communityName === input.community);
 
-  const slug = input.community || communityDefinition?.slug || input.submolt;
-  const name = communityDefinition?.name || input.community || input.submolt;
+  const slug = input.community || communityDefinition?.slug || input.community;
+  const name = communityDefinition?.name || input.community || input.community;
   const description = communityDefinition?.description || input.communityDescription || 'Community created from a first local post.';
   const whenToPost = communityDefinition?.whenToPost || input.communityWhenToPost || 'Use this for learnings, fixes, useful observations, and well-scoped requests for help.';
 
   const result = await client.query<CommunityRow>(
     `
-      insert into communities (track_id, slug, submolt_name, name, description, when_to_post)
+      insert into communities (track_id, slug, community_name, name, description, when_to_post)
       values ($1, $2, $3, $4, $5, $6)
       on conflict (slug) do update
       set
         track_id = excluded.track_id,
-        submolt_name = excluded.submolt_name,
+        community_name = excluded.community_name,
         name = excluded.name,
         description = excluded.description,
         when_to_post = excluded.when_to_post,
         updated_at = now()
       returning *
     `,
-    [trackId, slug, input.submolt || communityDefinition?.submoltName || null, name, description, whenToPost]
+    [trackId, slug, input.community || communityDefinition?.communityName || null, name, description, whenToPost]
   );
 
   return result.rows[0];
@@ -104,8 +103,8 @@ function mapPost(row: PostRow): Post {
     title: row.title,
     content: row.body_markdown || undefined,
     url: row.url || undefined,
-    submolt: row.submolt_name || row.community_slug,
-    submoltDisplayName: row.community_name,
+    community: row.community_name || row.community_slug,
+    communityDisplayName: row.community_name || undefined,
     postType: row.url ? 'link' : 'text',
     score: row.score,
     tags: (row.tags_text || '').split(',').map((item) => item.trim()).filter(Boolean),
@@ -212,7 +211,7 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
         agents.display_name,
         communities.slug as community_slug,
         communities.name as community_name,
-        communities.submolt_name,
+        communities.community_name,
         string_agg(distinct tag_definitions.name, ',') as tags_text,
         post_votes.value as user_vote
       from posts
@@ -237,7 +236,7 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
         agents.display_name,
         communities.slug,
         communities.name,
-        communities.submolt_name,
+        communities.community_name,
         post_votes.value
       limit 1
     `,
@@ -248,7 +247,7 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
   return post ? mapPost(post) : null;
 }
 
-export async function listLocalPosts(options: { submolt?: string; limit?: number; offset?: number; sort?: string; viewerAgentId?: string }) {
+export async function listLocalPosts(options: { community?: string; limit?: number; offset?: number; sort?: string; viewerAgentId?: string }) {
   const limit = Math.min(options.limit || 25, 50);
   const offset = options.offset || 0;
   const sortOrder = options.sort === 'top' ? 'posts.score desc, posts.created_at desc' : 'posts.created_at desc';
@@ -256,9 +255,9 @@ export async function listLocalPosts(options: { submolt?: string; limit?: number
   const values: unknown[] = [options.viewerAgentId || null];
   let whereClause = '';
 
-  if (options.submolt) {
-    values.push(options.submolt);
-    whereClause = `where (communities.submolt_name = $${values.length} or communities.slug = $${values.length})`;
+  if (options.community) {
+    values.push(options.community);
+    whereClause = `where (communities.community_name = $${values.length} or communities.slug = $${values.length})`;
   }
 
   values.push(limit, offset);
@@ -280,7 +279,7 @@ export async function listLocalPosts(options: { submolt?: string; limit?: number
         agents.display_name,
         communities.slug as community_slug,
         communities.name as community_name,
-        communities.submolt_name,
+        communities.community_name,
         string_agg(distinct tag_definitions.name, ',') as tags_text,
         post_votes.value as user_vote
       from posts
@@ -305,7 +304,7 @@ export async function listLocalPosts(options: { submolt?: string; limit?: number
         agents.display_name,
         communities.slug,
         communities.name,
-        communities.submolt_name,
+        communities.community_name,
         post_votes.value
       order by ${sortOrder}
       limit $${values.length - 1}

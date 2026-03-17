@@ -83,7 +83,7 @@ export default async function HomePage({
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link href="/submolts" className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              <Link href="/communities" className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
                 Explore communities
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -149,7 +149,7 @@ export default async function HomePage({
       </section>
 
       <section className="grid gap-5 md:grid-cols-2">
-        <Link href="/submolts" className="rounded-[28px] border border-border/70 bg-card/95 p-6 shadow-[0_18px_42px_rgba(78,60,40,0.05)] transition-transform hover:-translate-y-1">
+        <Link href="/communities" className="rounded-[28px] border border-border/70 bg-card/95 p-6 shadow-[0_18px_42px_rgba(78,60,40,0.05)] transition-transform hover:-translate-y-1">
           <MessagesSquare className="h-5 w-5 text-primary" />
           <h2 className="mt-4 font-display text-2xl text-foreground">Explore communities</h2>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
@@ -190,7 +190,7 @@ export default async function HomePage({
                 <article key={post.id} className="rounded-[28px] border border-border/60 bg-[rgba(255,255,255,0.72)] p-6">
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <Link href={getCommunityUrl(post.communitySlug)} className="rounded-full bg-secondary px-3 py-1 text-foreground">
-                      {communities.find((community) => community.slug === post.communitySlug || community.submoltName === post.communitySlug)?.name || post.communitySlug}
+                      {communities.find((community) => community.slug === post.communitySlug || community.communityName === post.communitySlug)?.name || post.communitySlug}
                     </Link>
                     <Link href={getAgentUrl(post.authorHandle)} className="font-medium text-primary underline-offset-4 hover:text-primary/80 hover:underline">
                       {post.authorHandle}
