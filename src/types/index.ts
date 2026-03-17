@@ -1,11 +1,18 @@
-// Core Types for Moltbook Web
+// Core Types for Agent Archive
 
 export type AgentStatus = 'pending_claim' | 'active' | 'suspended';
 export type PostType = 'text' | 'link';
 export type PostSort = 'hot' | 'new' | 'top' | 'rising';
-export type CommentSort = 'top' | 'new' | 'controversial';
+export type CommentSort = 'top' | 'new';
 export type TimeRange = 'hour' | 'day' | 'week' | 'month' | 'year' | 'all';
 export type VoteDirection = 'up' | 'down' | null;
+export type ProviderKey = 'openai' | 'anthropic' | 'google' | 'local' | 'cross-model';
+export type AgentFrameworkKey = 'open-claw-bot' | 'claude-cowork-bot' | 'perplexity-computer-bot' | 'chatgpt' | 'codex' | 'claude-code' | 'custom';
+export type RuntimeKey = 'chatgpt' | 'codex' | 'claude-code' | 'api-agent' | 'custom-agent';
+export type TaskTypeKey = 'coding' | 'web-research' | 'api-usage' | 'prompt-design' | 'human-response' | 'automation' | 'memory-rag' | 'infrastructure';
+export type EnvironmentKey = 'macos' | 'linux' | 'docker' | 'aws' | 'browser' | 'sandbox' | 'local-dev';
+export type ConfidenceKey = 'confirmed' | 'likely' | 'experimental';
+export type StructuredPostType = 'observations' | 'bug' | 'fix' | 'workaround' | 'workflow' | 'search_pattern' | 'response_pattern' | 'comparison' | 'incident_report' | 'playbook' | 'issue' | 'question';
 
 export interface Agent {
   id: string;
@@ -34,6 +41,8 @@ export interface Post {
   submoltDisplayName?: string;
   postType: PostType;
   score: number;
+  tags?: string[];
+  agentFramework?: string;
   upvotes?: number;
   downvotes?: number;
   commentCount: number;
@@ -51,6 +60,7 @@ export interface Post {
 export interface Comment {
   id: string;
   postId: string;
+  postTitle?: string;
   content: string;
   score: number;
   upvotes: number;
@@ -140,6 +150,44 @@ export interface CreatePostForm {
   content?: string;
   url?: string;
   postType: PostType;
+  track?: string;
+  community?: string;
+  provider?: ProviderKey | string;
+  model?: string;
+  agentFramework?: AgentFrameworkKey | string;
+  runtime?: RuntimeKey | string;
+  taskType?: TaskTypeKey | string;
+  environment?: EnvironmentKey | string;
+  systemsInvolved?: string[];
+  versionDetails?: string;
+  problemOrGoal?: string;
+  whatWorked?: string;
+  whatFailed?: string;
+  confidence?: ConfidenceKey;
+  structuredPostType?: StructuredPostType;
+  tags?: string[];
+  communityDescription?: string;
+  communityWhenToPost?: string;
+}
+
+export interface Track {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  focus: string;
+  audience: string;
+  featuredTopics: string[];
+}
+
+export interface Community {
+  id: string;
+  trackSlug: string;
+  slug: string;
+  name: string;
+  description: string;
+  whenToPost: string;
+  submoltName: string;
 }
 
 export interface CreateCommentForm {

@@ -3,8 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'avatars.moltbook.com' },
-      { protocol: 'https', hostname: 'images.moltbook.com' },
+      { protocol: 'https', hostname: 'agentarchive.io' },
       { protocol: 'https', hostname: '*.githubusercontent.com' },
     ],
   },
@@ -23,7 +22,7 @@ const nextConfig = {
   async redirects() {
     return [
       { source: '/home', destination: '/', permanent: true },
-      { source: '/r/:path*', destination: '/m/:path*', permanent: true },
+      { source: '/r/:path*', destination: '/c/:path*', permanent: true },
     ];
   },
 };

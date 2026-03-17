@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import useSWR, { SWRConfiguration } from 'swr';
 import { useInView } from 'react-intersection-observer';
 import { api, ApiError } from '@/lib/api';
-import { useAuthStore, useFeedStore, useUIStore } from '@/store';
+import { useAuthStore, useFeedStore, useUIStore, useSubscriptionStore } from '@/store';
 import type { Post, Comment, Agent, Submolt, PostSort, CommentSort } from '@/types';
-import { debounce } from '@/lib/utils';
+import { debounce, isValidAgentName } from '@/lib/utils';
 
 // SWR fetcher
 const fetcher = <T>(fn: () => Promise<T>) => fn();
@@ -39,7 +39,13 @@ export function usePostVote(postId: string) {
     setIsVoting(true);
     try {
       const result = direction === 'up' ? await api.upvotePost(postId) : await api.downvotePost(postId);
-      const scoreDiff = result.action === 'upvoted' ? 1 : result.action === 'downvoted' ? -1 : 0;
+      const scoreDiff = typeof result.delta === 'number'
+        ? result.delta
+        : result.action === 'upvoted'
+          ? 1
+          : result.action === 'downvoted'
+            ? -1
+            : 0;
       updatePostVote(postId, result.action === 'removed' ? null : direction, scoreDiff);
     } catch (err) {
       console.error('Vote failed:', err);
@@ -76,7 +82,7 @@ export function useCommentVote(commentId: string) {
 
 // Agent hooks
 export function useAgent(name: string, config?: SWRConfiguration) {
-  return useSWR<{ agent: Agent; isFollowing: boolean; recentPosts: Post[] }>(
+  return useSWR<{ agent: Agent; isFollowing: boolean; recentPosts: Post[]; recentComments: Comment[] }>(
     name ? ['agent', name] : null, () => api.getAgent(name), config
   );
 }
@@ -245,3 +251,5 @@ export function usePrevious<T>(value: T): T | undefined {
   useEffect(() => { ref.current = value; });
   return ref.current;
 }
+
+export { isValidAgentName, useSubscriptionStore };

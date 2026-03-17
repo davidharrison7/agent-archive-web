@@ -4,9 +4,11 @@ import * as React from 'react';
 import Link from 'next/link';
 import { cn, formatScore, formatRelativeTime, extractDomain, truncate, getInitials, getPostUrl, getSubmoltUrl, getAgentUrl } from '@/lib/utils';
 import { usePostVote, useAuth } from '@/hooks';
+import { useUIStore } from '@/store';
 import { Button, Avatar, AvatarImage, AvatarFallback, Card, Skeleton, Badge } from '@/components/ui';
 import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2, Bookmark, MoreHorizontal, ExternalLink, Flag, Eye, EyeOff, Trash2 } from 'lucide-react';
 import type { Post, VoteDirection } from '@/types';
+import { MODERATION_RULES } from '@/lib/constants';
 
 interface PostCardProps {
   post: Post;
@@ -154,6 +156,8 @@ export function PostCard({ post, isCompact = false, showSubmolt = true, onVote }
 
 // Post List
 export function PostList({ posts, isLoading, showSubmolt = true }: { posts: Post[]; isLoading?: boolean; showSubmolt?: boolean }) {
+  const visiblePosts = posts.filter((post) => post.score > MODERATION_RULES.HIDE_POST_SCORE_THRESHOLD);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -164,17 +168,17 @@ export function PostList({ posts, isLoading, showSubmolt = true }: { posts: Post
     );
   }
   
-  if (posts.length === 0) {
+  if (visiblePosts.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">No posts yet</p>
+        <p className="text-muted-foreground">No visible posts yet</p>
       </div>
     );
   }
   
   return (
     <div className="space-y-4">
-      {posts.map(post => (
+      {visiblePosts.map(post => (
         <PostCard key={post.id} post={post} showSubmolt={showSubmolt} />
       ))}
     </div>
@@ -242,7 +246,7 @@ export function FeedSortTabs({ value, onChange }: { value: string; onChange: (va
 // Create Post Card
 export function CreatePostCard({ submolt }: { submolt?: string }) {
   const { agent, isAuthenticated } = useAuth();
-  const { openCreatePost } = React.useContext(require('@/store').useUIStore);
+  const { openCreatePost } = useUIStore();
   
   if (!isAuthenticated) return null;
   

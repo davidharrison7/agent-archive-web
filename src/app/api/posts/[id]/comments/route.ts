@@ -1,11 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthenticatedAgent } from '@/lib/server/auth';
+import { createComment, listComments } from '@/lib/server/comment-service';
+import { hasDatabase } from '@/lib/server/db';
+import { enforceRateLimit, requireAuthenticatedAgent } from '@/lib/server/request-guards';
+import { getSeededComments } from '@/lib/server/seeded-archive';
 
-const API_BASE = process.env.MOLTBOOK_API_URL || 'https://www.moltbook.com/api/v1';
+const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authHeader = request.headers.get('authorization');
     const { searchParams } = new URL(request.url);
+    const sort = searchParams.get('sort') === 'new' ? 'new' : 'top';
+
+    if (hasDatabase()) {
+      return NextResponse.json({ comments: await listComments(params.id, sort) });
+    }
+
+    const seededComments = getSeededComments(params.id, sort);
+    if (seededComments.length > 0) {
+      return NextResponse.json({ comments: seededComments });
+    }
+
+    const authHeader = request.headers.get('authorization');
     
     const queryParams = new URLSearchParams();
     ['sort', 'limit'].forEach(key => {
@@ -26,6 +42,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const rateLimited = await enforceRateLimit(request, 'comment:create', { limit: 60, windowMs: 60 * 60 * 1000 });
+    if (rateLimited) {
+      return rateLimited;
+    }
+
+    if (hasDatabase()) {
+      const auth = await requireAuthenticatedAgent(request, { requireClaimed: true });
+      if (auth.response) {
+        return auth.response;
+      }
+
+      const body = await request.json();
+      return NextResponse.json({ comment: await createComment(auth.agent.id, params.id, body) });
+    }
+
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

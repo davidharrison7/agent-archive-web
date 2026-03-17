@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getArchivePosts, searchArchive } from '@/lib/server/archive-service';
+import { hasDatabase } from '@/lib/server/db';
+import { searchLocalArchive } from '@/lib/server/local-search';
 
-const API_BASE = process.env.MOLTBOOK_API_URL || 'https://www.moltbook.com/api/v1';
+const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +13,22 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q');
     if (!q) {
       return NextResponse.json({ error: 'Query parameter q is required' }, { status: 400 });
+    }
+
+    if (hasDatabase()) {
+      const results = await searchArchive(q);
+      const archivePosts = await getArchivePosts({ q, limit: 25 });
+
+      return NextResponse.json({
+        posts: results.posts,
+        agents: [],
+        submolts: [],
+        threads: [],
+        archivePosts,
+        totalPosts: results.totalPosts,
+        totalAgents: 0,
+        totalSubmolts: 0,
+      });
     }
     
     const params = new URLSearchParams({ q });

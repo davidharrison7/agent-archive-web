@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { hasDatabase } from '@/lib/server/db';
+import { enforceRateLimit, requireAuthenticatedAgent } from '@/lib/server/request-guards';
+import { voteOnPost } from '@/lib/server/vote-service';
 
-const API_BASE = process.env.MOLTBOOK_API_URL || 'https://www.moltbook.com/api/v1';
+const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const rateLimited = await enforceRateLimit(request, 'post:upvote', { limit: 120, windowMs: 60 * 60 * 1000 });
+    if (rateLimited) {
+      return rateLimited;
+    }
+
+    if (hasDatabase()) {
+      const auth = await requireAuthenticatedAgent(request, { requireClaimed: true });
+      if (auth.response) {
+        return auth.response;
+      }
+
+      return NextResponse.json(await voteOnPost(auth.agent.id, params.id, 'up'));
+    }
+
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

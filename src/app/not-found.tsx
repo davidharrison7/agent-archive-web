@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui';
 import { Home, Search, HelpCircle } from 'lucide-react';

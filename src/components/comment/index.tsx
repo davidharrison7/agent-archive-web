@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { cn, formatScore, formatRelativeTime, getInitials, getAgentUrl } from '@/lib/utils';
-import { useCommentVote, useAuth, useToggle } from '@/hooks';
+import { useCommentVote, useAuth, useToggle, useCopyToClipboard } from '@/hooks';
 import { Button, Avatar, AvatarImage, AvatarFallback, Textarea, Skeleton } from '@/components/ui';
 import { ArrowBigUp, ArrowBigDown, MessageSquare, MoreHorizontal, ChevronDown, ChevronUp, Flag, Trash2, Edit2, Reply } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -24,6 +25,9 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
   const [showMenu, setShowMenu] = React.useState(false);
   const [replyContent, setReplyContent] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [reportNotice, setReportNotice] = React.useState<string | null>(null);
+  const params = useParams<{ id: string }>();
+  const [, copy] = useCopyToClipboard();
   
   const isUpvoted = comment.userVote === 'up';
   const isDownvoted = comment.userVote === 'down';
@@ -53,9 +57,20 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
       setIsSubmitting(false);
     }
   };
+
+  const handleReport = async () => {
+    const commentUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/post/${params.id}#comment-${comment.id}`
+        : `/post/${params.id}#comment-${comment.id}`;
+    await copy(commentUrl);
+    setReportNotice('Comment link copied for manual review.');
+    setShowMenu(false);
+    window.setTimeout(() => setReportNotice(null), 3000);
+  };
   
   return (
-    <div className={cn('comment', comment.depth > 0 && 'ml-4')} style={{ marginLeft: `${Math.min(comment.depth, 8) * 16}px` }}>
+    <div id={`comment-${comment.id}`} className={cn('comment', comment.depth > 0 && 'ml-4')} style={{ marginLeft: `${Math.min(comment.depth, 8) * 16}px` }}>
       {/* Header */}
       <div className="flex items-center gap-2 mb-1">
         <button onClick={() => toggleCollapsed()} className="p-0.5 hover:bg-muted rounded">
@@ -67,7 +82,7 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
             <AvatarImage src={comment.authorAvatarUrl} />
             <AvatarFallback className="text-[10px]">{getInitials(comment.authorName)}</AvatarFallback>
           </Avatar>
-          <span className="text-sm font-medium hover:underline">u/{comment.authorName}</span>
+          <span className="text-sm font-medium text-primary hover:text-primary/80 hover:underline">u/{comment.authorName}</span>
         </Link>
         
         <span className="text-xs text-muted-foreground">•</span>
@@ -80,7 +95,7 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
       {/* Content */}
       {!isCollapsed && (
         <>
-          <div className="prose-moltbook text-sm py-1">
+          <div className="prose-archive text-sm py-1">
             {comment.content}
           </div>
           
@@ -94,7 +109,7 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
               >
                 <ArrowBigUp className={cn('h-5 w-5', isUpvoted && 'fill-current')} />
               </button>
-              <span className={cn('text-xs font-medium px-1', comment.score > 0 && 'text-upvote', comment.score < 0 && 'text-downvote')}>
+              <span className="px-1 text-xs font-bold text-foreground">
                 {formatScore(comment.score)}
               </span>
               <button
@@ -130,13 +145,14 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
                       </button>
                     </>
                   )}
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive">
+                  <button onClick={handleReport} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive">
                     <Flag className="h-3.5 w-3.5" /> Report
                   </button>
                 </div>
               )}
             </div>
           </div>
+          {reportNotice ? <p className="mt-2 text-xs text-muted-foreground">{reportNotice}</p> : null}
           
           {/* Reply form */}
           {isReplying && (
@@ -319,7 +335,6 @@ export function CommentSort({ value, onChange }: { value: string; onChange: (val
   const options = [
     { value: 'top', label: 'Top' },
     { value: 'new', label: 'New' },
-    { value: 'controversial', label: 'Controversial' },
   ];
   
   return (

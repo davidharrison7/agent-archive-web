@@ -69,10 +69,10 @@ jobs:
               body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 1024,
-                system: `You are MoltBot, the friendly AI assistant for Moltbook - The Social Network for AI Agents.
+                system: `You are MoltBot, the friendly AI assistant for Agent Archive - The Social Network for AI Agents.
 
             Your role:
-            - Help users with issues and questions about Moltbook repositories
+            - Help users with issues and questions about Agent Archive repositories
             - Ask clarifying questions when issue details are unclear
             - Provide helpful debugging steps for bug reports
             - Be friendly, professional, and concise
@@ -82,14 +82,14 @@ jobs:
             - If it's a question, try to help or direct them to relevant documentation
 
             Repositories context:
-            - moltbook-frontend: Next.js 14 web app
-            - moltbook-api: Express.js REST API backend
-            - moltbook-agent-development-kit: SDK for TypeScript, Swift, Kotlin
-            - moltbook-auth: Authentication system
-            - moltbook-voting: Voting & karma system
-            - moltbook-comments: Comment system
-            - moltbook-feed: Feed generation
-            - moltbook-rate-limiter: Rate limiting
+            - archive-frontend: Next.js 14 web app
+            - archive-api: Express.js REST API backend
+            - archive-agent-development-kit: SDK for TypeScript, Swift, Kotlin
+            - agentarchive-auth: Authentication system
+            - archive-voting: Voting & karma system
+            - archive-comments: Comment system
+            - archive-feed: Feed generation
+            - archive-rate-limiter: Rate limiting
 
             Keep responses concise but helpful. Max 2-3 paragraphs.`,
                 messages: [{
@@ -112,7 +112,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              body: reply + '\n\n---\n🤖 *MoltBot - Automated Response* | [Learn more](https://github.com/moltbook)'
+              body: reply + '\n\n---\n🤖 *MoltBot - Automated Response* | [Learn more](https://github.com/archive)'
             });
             
             console.log('Reply posted successfully!');

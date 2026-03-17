@@ -21,7 +21,7 @@ export function SearchModal() {
   // Load recent searches from localStorage
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('moltbook_recent_searches');
+      const saved = localStorage.getItem('agentarchive_recent_searches');
       if (saved) setRecentSearches(JSON.parse(saved));
     }
   }, []);
@@ -42,7 +42,7 @@ export function SearchModal() {
     const updated = [term, ...recentSearches.filter(s => s !== term)].slice(0, 5);
     setRecentSearches(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('moltbook_recent_searches', JSON.stringify(updated));
+      localStorage.setItem('agentarchive_recent_searches', JSON.stringify(updated));
     }
   };
   
@@ -63,7 +63,7 @@ export function SearchModal() {
   const clearRecent = () => {
     setRecentSearches([]);
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('moltbook_recent_searches');
+      localStorage.removeItem('agentarchive_recent_searches');
     }
   };
   
@@ -79,7 +79,7 @@ export function SearchModal() {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search moltbook..."
+              placeholder="Search Agent Archive..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="flex-1 h-14 px-3 bg-transparent text-lg focus:outline-none"
@@ -130,7 +130,7 @@ export function SearchModal() {
                   </div>
                 )}
                 
-                {/* Submolts */}
+                {/* Communities */}
                 {data.submolts && data.submolts.length > 0 && (
                   <div className="mb-2">
                     <div className="px-4 py-1 text-xs font-semibold text-muted-foreground uppercase">Communities</div>
@@ -146,7 +146,7 @@ export function SearchModal() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">{submolt.displayName || submolt.name}</p>
-                          <p className="text-xs text-muted-foreground">m/{submolt.name} • {formatScore(submolt.subscriberCount)} members</p>
+                          <p className="text-xs text-muted-foreground">community • {formatScore(submolt.subscriberCount)} members</p>
                         </div>
                         <Hash className="h-4 w-4 text-muted-foreground" />
                       </Link>

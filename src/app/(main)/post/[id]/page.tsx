@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { usePost, useComments, usePostVote, useAuth } from '@/hooks';
+import { usePost, useComments, usePostVote, useAuth, useCopyToClipboard } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { CommentList, CommentForm, CommentSort } from '@/components/comment';
 import { Button, Card, Avatar, AvatarImage, AvatarFallback, Skeleton, Separator } from '@/components/ui';
-import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2, Bookmark, MoreHorizontal, ExternalLink, ArrowLeft } from 'lucide-react';
+import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2, Bookmark, MoreHorizontal, ExternalLink, ArrowLeft, Flag, Link2 } from 'lucide-react';
 import { cn, formatScore, formatRelativeTime, formatDateTime, extractDomain, getInitials, getSubmoltUrl, getAgentUrl } from '@/lib/utils';
 import type { CommentSort as CommentSortType, Comment } from '@/types';
 
@@ -15,9 +15,12 @@ export default function PostPage() {
   const params = useParams<{ id: string }>();
   const { data: post, isLoading: postLoading, error: postError, mutate: mutatePost } = usePost(params.id);
   const [commentSort, setCommentSort] = useState<CommentSortType>('top');
+  const [showPostMenu, setShowPostMenu] = useState(false);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
   const { data: comments, isLoading: commentsLoading, mutate: mutateComments } = useComments(params.id, { sort: commentSort });
   const { vote, isVoting } = usePostVote(params.id);
   const { isAuthenticated } = useAuth();
+  const [copied, copy] = useCopyToClipboard();
   
   if (postError) return notFound();
   
@@ -32,6 +35,20 @@ export default function PostPage() {
   
   const handleNewComment = (comment: Comment) => {
     mutateComments([...(comments || []), comment], false);
+  };
+
+  const postUrl = typeof window !== 'undefined' ? `${window.location.origin}/post/${params.id}` : `/post/${params.id}`;
+
+  const handleShare = async () => {
+    await copy(postUrl);
+    setShowPostMenu(false);
+  };
+
+  const handleReport = async () => {
+    await copy(postUrl);
+    setReportNotice('Report link copied. Full reporting workflow can be wired to moderation later.');
+    setShowPostMenu(false);
+    window.setTimeout(() => setReportNotice(null), 3000);
   };
   
   return (
@@ -79,7 +96,7 @@ export default function PostPage() {
               
               {/* Content */}
               {post.content && (
-                <div className="prose-moltbook mb-4">
+                <div className="prose-archive mb-4">
                   {post.content}
                 </div>
               )}
@@ -93,14 +110,14 @@ export default function PostPage() {
                   </div>
                 </a>
               )}
-              
+
               {/* Actions */}
               <div className="flex items-center gap-2 pt-2 border-t">
                 <div className="flex items-center gap-1">
                   <button onClick={() => handleVote('up')} disabled={isVoting || !isAuthenticated} className={cn('vote-btn vote-btn-up', isUpvoted && 'active')}>
                     <ArrowBigUp className={cn('h-6 w-6', isUpvoted && 'fill-current')} />
                   </button>
-                  <span className={cn('font-medium px-1', post.score > 0 && 'text-upvote', post.score < 0 && 'text-downvote')}>
+                  <span className="px-1 text-sm font-bold text-foreground">
                     {formatScore(post.score)}
                   </span>
                   <button onClick={() => handleVote('down')} disabled={isVoting || !isAuthenticated} className={cn('vote-btn vote-btn-down', isDownvoted && 'active')}>
@@ -115,9 +132,9 @@ export default function PostPage() {
                   <span className="text-sm">{post.commentCount} comments</span>
                 </div>
                 
-                <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors ml-auto">
+                <button onClick={handleShare} className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors ml-auto">
                   <Share2 className="h-4 w-4" />
-                  Share
+                  {copied ? 'Link copied' : 'Share'}
                 </button>
                 
                 {isAuthenticated && (
@@ -127,10 +144,23 @@ export default function PostPage() {
                   </button>
                 )}
                 
-                <button className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors">
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
+                <div className="relative">
+                  <button onClick={() => setShowPostMenu((open) => !open)} className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors">
+                    <MoreHorizontal className="h-5 w-5" />
+                  </button>
+                  {showPostMenu && (
+                    <div className="absolute right-0 top-full mt-1 w-44 rounded-md border bg-popover shadow-lg z-10">
+                      <button onClick={handleShare} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">
+                        <Link2 className="h-3.5 w-3.5" /> Copy link
+                      </button>
+                      <button onClick={handleReport} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive">
+                        <Flag className="h-3.5 w-3.5" /> Report
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
+              {reportNotice ? <p className="mt-3 text-sm text-muted-foreground">{reportNotice}</p> : null}
             </>
           ) : null}
         </Card>

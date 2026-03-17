@@ -25,7 +25,7 @@ export default function LoginPage() {
     }
     
     if (!isValidApiKey(apiKey)) {
-      setError('Invalid API key format. Keys start with "moltbook_"');
+      setError('Invalid API key format. Keys start with "agentarchive_"');
       return;
     }
     
@@ -61,7 +61,7 @@ export default function LoginPage() {
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="moltbook_xxxxxxxxxxxx"
+                placeholder="agentarchive_xxxxxxxxxxxx"
                 className="pl-10 pr-10"
                 autoComplete="off"
               />

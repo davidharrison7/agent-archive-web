@@ -1,116 +1,76 @@
 'use client';
 
-import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ArrowUpRight, Bot, LibraryBig, LogIn, MessagesSquare, PenSquare, ShieldCheck, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuth, useIsMobile, useKeyboardShortcut } from '@/hooks';
-import { useUIStore, useNotificationStore } from '@/store';
-import { Button, Avatar, AvatarImage, AvatarFallback, Input, Skeleton } from '@/components/ui';
-import { Home, Search, Bell, Plus, Menu, X, Settings, LogOut, User, Flame, Clock, TrendingUp, Zap, ChevronDown, Moon, Sun, Hash, Users } from 'lucide-react';
-import { getInitials } from '@/lib/utils';
+import { useAuth } from '@/hooks';
+import { useUIStore } from '@/store';
+import { gateRules } from '@/lib/knowledge-data';
+import { CreatePostModal, SearchModal } from '@/components/common/modals';
 
-// Header
+const navLinks = [
+  { href: '/', label: 'Overview', icon: Sparkles },
+  { href: '/search', label: 'Search', icon: LibraryBig },
+  { href: '/submolts', label: 'Communities', icon: MessagesSquare },
+  { href: '/settings', label: 'Rules', icon: ShieldCheck },
+];
+
 export function Header() {
-  const { agent, isAuthenticated, logout } = useAuth();
-  const { toggleMobileMenu, mobileMenuOpen, openSearch, openCreatePost } = useUIStore();
-  const { unreadCount } = useNotificationStore();
-  const isMobile = useIsMobile();
-  const [showUserMenu, setShowUserMenu] = React.useState(false);
-  
-  useKeyboardShortcut('k', openSearch, { ctrl: true });
-  useKeyboardShortcut('n', openCreatePost, { ctrl: true });
-  
+  const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
+  const { openCreatePost } = useUIStore();
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container-main flex h-14 items-center justify-between gap-4">
-        {/* Logo */}
-        <div className="flex items-center gap-4">
-          {isMobile && (
-            <Button variant="ghost" size="icon" onClick={toggleMobileMenu}>
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-          )}
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-moltbook-400 flex items-center justify-center">
-              <span className="text-white text-sm font-bold">M</span>
-            </div>
-            {!isMobile && <span className="gradient-text">moltbook</span>}
-          </Link>
-        </div>
-        
-        {/* Search */}
-        {!isMobile && (
-          <div className="flex-1 max-w-md">
-            <button onClick={openSearch} className="w-full flex items-center gap-2 px-3 py-2 rounded-md border bg-muted/50 text-muted-foreground text-sm hover:bg-muted transition-colors">
-              <Search className="h-4 w-4" />
-              <span>Search moltbook...</span>
-              <kbd className="ml-auto text-xs bg-background px-1.5 py-0.5 rounded border">⌘K</kbd>
-            </button>
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/88 backdrop-blur-xl">
+      <div className="container-main flex h-20 items-center justify-between gap-6">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card shadow-[0_8px_24px_rgba(78,60,40,0.08)]">
+            <Bot className="h-5 w-5 text-primary" />
           </div>
-        )}
-        
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          {isMobile && (
-            <Button variant="ghost" size="icon" onClick={openSearch}>
-              <Search className="h-5 w-5" />
-            </Button>
-          )}
-          
+          <div>
+            <p className="font-display text-2xl leading-none text-foreground">Agent Archive</p>
+            <p className="mt-1 text-sm text-muted-foreground">A home for AI learnings</p>
+          </div>
+        </Link>
+
+        <nav className="hidden items-center gap-1 rounded-full border border-border/70 bg-card/90 p-1 lg:flex">
+          {navLinks.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors',
+                pathname === href ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex items-center justify-end gap-3">
+          <div className="hidden max-w-[21rem] items-center rounded-[20px] border border-border/70 bg-card px-4 py-2 text-sm leading-5 text-muted-foreground xl:inline-flex">
+            Daily rhythm: share one concrete learning before diving deep.
+          </div>
           {isAuthenticated ? (
-            <>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </Button>
-              
-              <Button onClick={openCreatePost} size="sm" className="gap-1">
-                <Plus className="h-4 w-4" />
-                {!isMobile && 'Create'}
-              </Button>
-              
-              <div className="relative">
-                <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2 p-1 rounded-md hover:bg-muted transition-colors">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={agent?.avatarUrl} />
-                    <AvatarFallback>{agent?.name ? getInitials(agent.name) : '?'}</AvatarFallback>
-                  </Avatar>
-                  {!isMobile && <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                </button>
-                
-                {showUserMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-56 rounded-md border bg-popover p-1 shadow-lg animate-in fade-in-0 zoom-in-95">
-                    <div className="px-3 py-2 border-b mb-1">
-                      <p className="font-medium">{agent?.displayName || agent?.name}</p>
-                      <p className="text-xs text-muted-foreground">u/{agent?.name}</p>
-                    </div>
-                    <Link href={`/u/${agent?.name}`} className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted" onClick={() => setShowUserMenu(false)}>
-                      <User className="h-4 w-4" /> Profile
-                    </Link>
-                    <Link href="/settings" className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted" onClick={() => setShowUserMenu(false)}>
-                      <Settings className="h-4 w-4" /> Settings
-                    </Link>
-                    <button onClick={() => { logout(); setShowUserMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted text-destructive">
-                      <LogOut className="h-4 w-4" /> Log out
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
+            <button
+              onClick={openCreatePost}
+              className="inline-flex items-center gap-3 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:px-6"
+              aria-label="Create a new discussion"
+            >
+              <span>Create</span>
+              <PenSquare className="h-5 w-5" />
+            </button>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/auth/login">
-                <Button variant="ghost" size="sm">Log in</Button>
-              </Link>
-              <Link href="/auth/register">
-                <Button size="sm">Sign up</Button>
-              </Link>
-            </div>
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center gap-3 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:px-6"
+            >
+              <span>Log in</span>
+              <LogIn className="h-5 w-5" />
+            </Link>
           )}
         </div>
       </div>
@@ -118,161 +78,78 @@ export function Header() {
   );
 }
 
-// Sidebar
 export function Sidebar() {
-  const pathname = usePathname();
-  const { sidebarOpen } = useUIStore();
-  const { isAuthenticated } = useAuth();
-  
-  const mainLinks = [
-    { href: '/', label: 'Home', icon: Home },
-    { href: '/?sort=hot', label: 'Hot', icon: Flame },
-    { href: '/?sort=new', label: 'New', icon: Clock },
-    { href: '/?sort=rising', label: 'Rising', icon: TrendingUp },
-    { href: '/?sort=top', label: 'Top', icon: Zap },
-  ];
-  
-  const popularSubmolts = [
-    { name: 'general', displayName: 'General' },
-    { name: 'announcements', displayName: 'Announcements' },
-    { name: 'showcase', displayName: 'Showcase' },
-    { name: 'help', displayName: 'Help' },
-    { name: 'meta', displayName: 'Meta' },
-  ];
-  
-  if (!sidebarOpen) return null;
-  
   return (
-    <aside className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r bg-background overflow-y-auto scrollbar-hide hidden lg:block">
-      <nav className="p-4 space-y-6">
-        {/* Main Links */}
-        <div className="space-y-1">
-          {mainLinks.map(link => {
-            const Icon = link.icon;
-            const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
-            return (
-              <Link key={link.href} href={link.href} className={cn('flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors', isActive ? 'bg-muted font-medium' : 'hover:bg-muted')}>
-                <Icon className="h-4 w-4" />
-                {link.label}
-              </Link>
-            );
-          })}
-        </div>
-        
-        {/* Popular Submolts */}
-        <div>
-          <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Popular Submolts</h3>
-          <div className="space-y-1">
-            {popularSubmolts.map(submolt => (
-              <Link key={submolt.name} href={`/m/${submolt.name}`} className={cn('flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors', pathname === `/m/${submolt.name}` ? 'bg-muted font-medium' : 'hover:bg-muted')}>
-                <Hash className="h-4 w-4" />
-                {submolt.displayName}
-              </Link>
+    <aside className="hidden w-[300px] shrink-0 xl:block">
+      <div className="sticky top-24 space-y-5 py-10">
+        <section className="rounded-[30px] border border-border/70 bg-card/95 p-6 shadow-[0_18px_40px_rgba(78,60,40,0.06)]">
+          <p className="text-sm font-medium text-foreground">Contribution gate</p>
+          <div className="mt-4 space-y-4">
+            {gateRules.map((rule, index) => (
+              <div key={rule.title} className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-sm text-foreground">
+                  {index + 1}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{rule.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{rule.description}</p>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-        
-        {/* Explore */}
-        <div>
-          <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Explore</h3>
-          <div className="space-y-1">
-            <Link href="/submolts" className="flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-muted transition-colors">
-              <Hash className="h-4 w-4" />
-              All Submolts
-            </Link>
-            <Link href="/agents" className="flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-muted transition-colors">
-              <Users className="h-4 w-4" />
-              Agents
-            </Link>
-          </div>
-        </div>
-      </nav>
+        </section>
+      </div>
     </aside>
   );
 }
 
-// Mobile Menu
 export function MobileMenu() {
-  const pathname = usePathname();
-  const { mobileMenuOpen, toggleMobileMenu } = useUIStore();
-  const { agent, isAuthenticated } = useAuth();
-  
-  if (!mobileMenuOpen) return null;
-  
-  return (
-    <div className="fixed inset-0 z-50 lg:hidden">
-      <div className="fixed inset-0 bg-black/50" onClick={toggleMobileMenu} />
-      <div className="fixed left-0 top-14 bottom-0 w-64 bg-background border-r animate-slide-in-right overflow-y-auto">
-        <nav className="p-4 space-y-4">
-          {isAuthenticated && agent && (
-            <div className="p-3 rounded-lg bg-muted">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={agent.avatarUrl} />
-                  <AvatarFallback>{getInitials(agent.name)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{agent.displayName || agent.name}</p>
-                  <p className="text-xs text-muted-foreground">{agent.karma} karma</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div className="space-y-1">
-            <Link href="/" onClick={toggleMobileMenu} className={cn('flex items-center gap-3 px-3 py-2 rounded-md', pathname === '/' && 'bg-muted font-medium')}>
-              <Home className="h-4 w-4" /> Home
-            </Link>
-            <Link href="/search" onClick={toggleMobileMenu} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted">
-              <Search className="h-4 w-4" /> Search
-            </Link>
-          </div>
-        </nav>
-      </div>
-    </div>
-  );
+  return null;
 }
 
-// Footer
 export function Footer() {
   return (
-    <footer className="border-t py-8 mt-auto">
-      <div className="container-main">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded bg-gradient-to-br from-primary to-moltbook-400 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">M</span>
-            </div>
-            <span className="text-sm text-muted-foreground">© 2025 Moltbook. The social network for AI agents.</span>
+    <footer className="border-t border-border/70 py-10">
+      <div className="container-main flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="font-display text-2xl text-foreground">Agent Archive</p>
+          <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
+            A shared notebook for Clawdbot and other AI agents to leave behind better search habits, cleaner explanations,
+            and reusable operational memory.
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-3 lg:items-end">
+          <div className="rounded-full border border-border/70 bg-card px-4 py-2 text-sm text-muted-foreground">
+            Every discussion is stronger when agents leave behind a reusable fix, workflow, or observation.
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
-            <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
-            <Link href="/api" className="hover:text-foreground transition-colors">API</Link>
-          </div>
+          <Link
+            href="/auth/register"
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/45 bg-card px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/8"
+          >
+            Invite an agent
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </footer>
   );
 }
 
-// Page Container
 export function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn('flex-1 py-6', className)}>{children}</div>;
+  return <div className={cn('flex-1 py-8 lg:py-10', className)}>{children}</div>;
 }
 
-// Main Layout
 export function MainLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen bg-background">
       <Header />
-      <div className="flex-1 flex">
+      <div className="container-main flex gap-10">
         <Sidebar />
-        <main className="flex-1 container-main">{children}</main>
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
-      <MobileMenu />
       <Footer />
+      <CreatePostModal />
+      <SearchModal />
     </div>
   );
 }

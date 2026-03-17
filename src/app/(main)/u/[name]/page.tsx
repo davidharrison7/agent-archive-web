@@ -6,24 +6,70 @@ import Link from 'next/link';
 import { useAgent, useAuth } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { PostList } from '@/components/post';
-import { Button, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge, Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
+import { Button, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge } from '@/components/ui';
 import { Calendar, Award, Users, FileText, MessageSquare, Settings } from 'lucide-react';
-import { cn, formatScore, formatDate, getInitials } from '@/lib/utils';
+import { cn, formatScore, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
 import { api } from '@/lib/api';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
+function PaginationControls({
+  page,
+  pageSize,
+  totalItems,
+  onPrevious,
+  onNext,
+  label,
+}: {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  onPrevious: () => void;
+  onNext: () => void;
+  label: string;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  if (totalItems <= pageSize) return null;
+
+  return (
+    <div className="flex items-center justify-between rounded-[22px] border border-border/70 bg-card/95 px-4 py-3 text-sm">
+      <p className="text-muted-foreground">
+        Showing {Math.min((page - 1) * pageSize + 1, totalItems)}-{Math.min(page * pageSize, totalItems)} of {totalItems} {label}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onPrevious} disabled={page === 1}>
+          Previous
+        </Button>
+        <span className="text-muted-foreground">
+          Page {page} of {totalPages}
+        </span>
+        <Button variant="outline" size="sm" onClick={onNext} disabled={page >= totalPages}>
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function UserProfilePage() {
+  const PAGE_SIZE = 25;
   const params = useParams<{ name: string }>();
   const { data, isLoading, error, mutate } = useAgent(params.name);
   const { agent: currentAgent, isAuthenticated } = useAuth();
   const [following, setFollowing] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
+  const [postsPage, setPostsPage] = useState(1);
+  const [commentsPage, setCommentsPage] = useState(1);
   
   if (error) return notFound();
   
   const agent = data?.agent;
   const isOwnProfile = currentAgent?.name === params.name;
   const isFollowing = data?.isFollowing || following;
+  const pagedPosts = data?.recentPosts?.slice((postsPage - 1) * PAGE_SIZE, postsPage * PAGE_SIZE) || [];
+  const pagedComments = data?.recentComments?.slice((commentsPage - 1) * PAGE_SIZE, commentsPage * PAGE_SIZE) || [];
+  const totalPosts = data?.recentPosts?.length || 0;
+  const totalComments = data?.recentComments?.length || 0;
   
   const handleFollow = async () => {
     if (!isAuthenticated || following) return;
@@ -46,7 +92,7 @@ export default function UserProfilePage() {
     <PageContainer>
       <div className="max-w-5xl mx-auto">
         {/* Banner */}
-        <div className="h-32 bg-gradient-to-r from-moltbook-600 to-primary rounded-lg mb-4" />
+        <div className="h-32 bg-gradient-to-r from-archive-600 to-primary rounded-lg mb-4" />
         
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Main content */}
@@ -147,7 +193,17 @@ export default function UserProfilePage() {
               
               <TabsPrimitive.Content value="posts">
                 {data?.recentPosts && data.recentPosts.length > 0 ? (
-                  <PostList posts={data.recentPosts} />
+                  <div className="space-y-4">
+                    <PostList posts={pagedPosts} />
+                    <PaginationControls
+                      page={postsPage}
+                      pageSize={PAGE_SIZE}
+                      totalItems={totalPosts}
+                      label="posts"
+                      onPrevious={() => setPostsPage((page) => Math.max(1, page - 1))}
+                      onNext={() => setPostsPage((page) => page + 1)}
+                    />
+                  </div>
                 ) : (
                   <Card className="p-8 text-center">
                     <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
@@ -157,10 +213,34 @@ export default function UserProfilePage() {
               </TabsPrimitive.Content>
               
               <TabsPrimitive.Content value="comments">
-                <Card className="p-8 text-center">
-                  <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                  <p className="text-muted-foreground">Comments coming soon</p>
-                </Card>
+                {data?.recentComments && data.recentComments.length > 0 ? (
+                  <div className="space-y-4">
+                    {pagedComments.map((comment) => (
+                      <Link key={comment.id} href={`/post/${comment.postId}`} className="block">
+                        <Card className="p-4 transition-colors hover:bg-muted/30">
+                          <p className="text-xs text-muted-foreground">
+                            On <span className="font-medium text-foreground">{comment.postTitle || 'a post'}</span> • {formatRelativeTime(comment.createdAt)}
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">{comment.content}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">{formatScore(comment.score)} points</p>
+                        </Card>
+                      </Link>
+                    ))}
+                    <PaginationControls
+                      page={commentsPage}
+                      pageSize={PAGE_SIZE}
+                      totalItems={totalComments}
+                      label="comments"
+                      onPrevious={() => setCommentsPage((page) => Math.max(1, page - 1))}
+                      onNext={() => setCommentsPage((page) => page + 1)}
+                    />
+                  </div>
+                ) : (
+                  <Card className="p-8 text-center">
+                    <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                    <p className="text-muted-foreground">No comments yet</p>
+                  </Card>
+                )}
               </TabsPrimitive.Content>
             </TabsPrimitive.Root>
           </div>

@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { formatDistanceToNow, format, parseISO } from 'date-fns';
+import { communities } from '@/lib/taxonomy-data';
 
 // Class name utility
 export function cn(...inputs: ClassValue[]) {
@@ -14,6 +15,10 @@ export function formatScore(score: number): string {
   if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
   if (abs >= 1000) return sign + (abs / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   return score.toString();
+}
+
+export function formatDirectionalScore(score: number): string {
+  return `${score < 0 ? '↓' : '↑'} ${formatScore(Math.abs(score))}`;
 }
 
 // Format relative time
@@ -52,7 +57,46 @@ export function extractDomain(url: string): string | null {
 
 // Validate agent name
 export function isValidAgentName(name: string): boolean {
-  return /^[a-z0-9_]{2,32}$/i.test(name);
+  return /^[a-z0-9_]{2,32}$/.test(name);
+}
+
+export function normalizeAgentName(name: string): string {
+  return name.toLowerCase().trim().replace(/[^a-z0-9_]/g, '');
+}
+
+export function slugifyCommunityName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function toSubmoltName(value: string): string {
+  return slugifyCommunityName(value).replace(/-/g, '_');
+}
+
+export function normalizeTagName(tag: string): string {
+  return tag
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s_-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function parseTagInput(value: string | string[] | undefined | null): string[] {
+  const items = Array.isArray(value) ? value : String(value || '').split(',');
+  return Array.from(
+    new Set(
+      items
+        .map((item) => normalizeTagName(item))
+        .filter(Boolean)
+    )
+  );
 }
 
 // Validate submolt name
@@ -62,7 +106,7 @@ export function isValidSubmoltName(name: string): boolean {
 
 // Validate API key
 export function isValidApiKey(key: string): boolean {
-  return /^moltbook_[a-zA-Z0-9]{20,}$/.test(key);
+  return /^agentarchive_[a-zA-Z0-9_-]{20,}$/.test(key);
 }
 
 // Generate initials from name
@@ -142,7 +186,23 @@ export function getPostUrl(postId: string, submolt?: string): string {
 }
 
 export function getSubmoltUrl(name: string): string {
-  return `/m/${name}`;
+  const community = communities.find((entry) => entry.submoltName === name || entry.slug === name);
+  return community ? `/c/${community.slug}` : `/m/${name}`;
+}
+
+export function getCommunityUrl(slug: string): string {
+  return `/c/${slug}`;
+}
+
+export function getThreadUrl(slug: string): string {
+  return `/t/${slug}`;
+}
+
+export function getCanonicalTopicSearchUrl(topic: string, communitySlug?: string): string {
+  const params = new URLSearchParams();
+  params.set('q', topic);
+  if (communitySlug) params.set('community', communitySlug);
+  return `/search?${params.toString()}`;
 }
 
 export function getAgentUrl(name: string): string {

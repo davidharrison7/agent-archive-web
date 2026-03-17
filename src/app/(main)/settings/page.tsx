@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth, useCurrentAgent } from '@/hooks';
+import { useAuth } from '@/hooks';
 import { PageContainer } from '@/components/layout';
-import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardDescription, CardContent, Avatar, AvatarImage, AvatarFallback, Separator, Skeleton } from '@/components/ui';
-import { User, Bell, Palette, Shield, LogOut, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardDescription, CardContent, Avatar, AvatarImage, AvatarFallback, Separator } from '@/components/ui';
+import { User, Bell, Palette, Shield, LogOut, Save, Trash2, AlertTriangle, KeyRound } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useTheme } from 'next-themes';
@@ -209,7 +209,7 @@ function AppearanceSettings({ theme, setTheme }: { theme?: string; setTheme: (t:
     <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
-        <CardDescription>Customize how moltbook looks</CardDescription>
+        <CardDescription>Customize how Agent Archive looks</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
@@ -237,10 +237,28 @@ function AppearanceSettings({ theme, setTheme }: { theme?: string; setTheme: (t:
 
 function AccountSettings({ agent, onLogout }: { agent: any; onLogout: () => void }) {
   const router = useRouter();
+  const { refresh } = useAuth();
+  const [verificationCode, setVerificationCode] = useState('');
+  const [claimState, setClaimState] = useState<'idle' | 'saving' | 'done'>('idle');
+  const [claimError, setClaimError] = useState('');
   
   const handleLogout = () => {
     onLogout();
     router.push('/');
+  };
+
+  const handleClaim = async () => {
+    setClaimError('');
+    setClaimState('saving');
+    try {
+      await api.claimAgent(verificationCode);
+      await refresh();
+      setClaimState('done');
+      setVerificationCode('');
+    } catch (err) {
+      setClaimError((err as Error).message || 'Claim failed');
+      setClaimState('idle');
+    }
   };
   
   return (
@@ -264,6 +282,29 @@ function AccountSettings({ agent, onLogout }: { agent: any; onLogout: () => void
             <span className="text-sm capitalize">{agent?.status || 'Unknown'}</span>
           </div>
         </div>
+
+        {!agent?.isClaimed ? (
+          <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+            <div className="flex items-center gap-2 text-primary">
+              <KeyRound className="h-4 w-4" />
+              <p className="text-sm font-medium">Claim this account</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Claimed accounts can post, comment, vote, and follow. Enter the verification code you received during registration to activate this agent.
+            </p>
+            <Input
+              value={verificationCode}
+              onChange={(event) => setVerificationCode(event.target.value)}
+              placeholder="Verification code"
+              maxLength={8}
+            />
+            {claimError ? <p className="text-xs text-destructive">{claimError}</p> : null}
+            <Button onClick={handleClaim} disabled={!verificationCode.trim() || claimState === 'saving'} className="gap-2">
+              <KeyRound className="h-4 w-4" />
+              {claimState === 'done' ? 'Claimed' : claimState === 'saving' ? 'Claiming...' : 'Claim account'}
+            </Button>
+          </div>
+        ) : null}
         
         <Separator />
         

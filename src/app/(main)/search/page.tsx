@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,26 +10,107 @@ import { PageContainer } from '@/components/layout';
 import { PostCard } from '@/components/post';
 import { Input, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge } from '@/components/ui';
 import { Search, Users, Hash, FileText, X } from 'lucide-react';
-import { cn, formatScore, getInitials, getAgentUrl, getSubmoltUrl } from '@/lib/utils';
+import { cn, formatDirectionalScore, formatScore, getInitials, getAgentUrl, getSubmoltUrl } from '@/lib/utils';
+import { communities, environmentOptions, providerOptions, runtimeOptions } from '@/lib/taxonomy-data';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import type { ArchiveFacets } from '@/lib/server/facets-service';
+
+type ArchiveResult = {
+  id: string;
+  title: string;
+  summary: string;
+  communitySlug: string;
+  communityName: string;
+  threadSlug?: string;
+  threadName?: string;
+  provider: string;
+  model: string;
+  agentFramework: string;
+  runtime: string;
+  environment: string;
+  systemsInvolved: string[];
+  tags: string[];
+  netUpvotes: number;
+  commentCount: number;
+  createdAt: string;
+  containsPromptInjectionSignals: boolean;
+};
 
 export default function SearchPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
+  const initialProvider = searchParams.get('provider') || '';
+  const initialModel = searchParams.get('model') || '';
+  const initialAgentFramework = searchParams.get('agentFramework') || '';
+  const initialRuntime = searchParams.get('runtime') || '';
+  const initialEnvironment = searchParams.get('environment') || '';
+  const initialCommunity = searchParams.get('community') || '';
+  const initialTag = searchParams.get('tag') || '';
   
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState('all');
+  const [provider, setProvider] = useState(initialProvider);
+  const [model, setModel] = useState(initialModel);
+  const [agentFramework, setAgentFramework] = useState(initialAgentFramework);
+  const [runtime, setRuntime] = useState(initialRuntime);
+  const [environment, setEnvironment] = useState(initialEnvironment);
+  const [community, setCommunity] = useState(initialCommunity);
+  const [tag, setTag] = useState(initialTag);
+  const [facets, setFacets] = useState<ArchiveFacets | null>(null);
+  const [archiveResults, setArchiveResults] = useState<ArchiveResult[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const debouncedQuery = useDebounce(query, 300);
   const { data, isLoading, error } = useSearch(debouncedQuery);
+  const hasActiveFilters = Boolean(provider || model || agentFramework || runtime || environment || community || tag);
   
   useEffect(() => {
-    if (debouncedQuery) {
-      router.replace(`/search?q=${encodeURIComponent(debouncedQuery)}`, { scroll: false });
+    fetch('/api/facets')
+      .then((response) => response.json())
+      .then((payload) => setFacets(payload))
+      .catch(() => setFacets(null));
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set('q', debouncedQuery);
+    if (provider) params.set('provider', provider);
+    if (model) params.set('model', model);
+    if (agentFramework) params.set('agentFramework', agentFramework);
+    if (runtime) params.set('runtime', runtime);
+    if (environment) params.set('environment', environment);
+    if (community) params.set('community', community);
+    if (tag) params.set('tag', tag);
+
+    const nextUrl = params.toString() ? `/search?${params.toString()}` : '/search';
+    router.replace(nextUrl, { scroll: false });
+  }, [agentFramework, community, debouncedQuery, environment, model, provider, router, runtime, tag]);
+
+  useEffect(() => {
+    if (debouncedQuery.length < 2 && !hasActiveFilters) {
+      setArchiveResults([]);
+      return;
     }
-  }, [debouncedQuery, router]);
+
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set('q', debouncedQuery);
+    if (provider) params.set('provider', provider);
+    if (model) params.set('model', model);
+    if (agentFramework) params.set('agentFramework', agentFramework);
+    if (runtime) params.set('runtime', runtime);
+    if (environment) params.set('environment', environment);
+    if (community) params.set('community', community);
+    if (tag) params.set('tag', tag);
+
+    setArchiveLoading(true);
+    fetch(`/api/archive?${params.toString()}`)
+      .then((response) => response.json())
+      .then((payload) => setArchiveResults(payload.posts || []))
+      .catch(() => setArchiveResults([]))
+      .finally(() => setArchiveLoading(false));
+  }, [agentFramework, community, debouncedQuery, environment, hasActiveFilters, model, provider, runtime, tag]);
   
-  const totalResults = (data?.posts?.length || 0) + (data?.agents?.length || 0) + (data?.submolts?.length || 0);
+  const totalResults = (data?.posts?.length || 0) + (data?.agents?.length || 0) + (data?.submolts?.length || 0) + archiveResults.length;
   
   return (
     <PageContainer>
@@ -38,7 +121,7 @@ export default function SearchPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search posts, agents, and submolts..."
+              placeholder="Search discussions, agents, communities, and tags..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full h-12 pl-12 pr-12 rounded-lg border bg-background text-lg focus:outline-none focus:ring-2 focus:ring-ring"
@@ -51,9 +134,67 @@ export default function SearchPage() {
             )}
           </div>
         </div>
+
+        <Card className="mb-6">
+          <CardContent className="grid gap-3 pt-6 md:grid-cols-2 xl:grid-cols-6">
+            <select value={provider} onChange={(event) => setProvider(event.target.value)} className="input">
+              <option value="">All providers</option>
+              {(facets?.providers || providerOptions.map((option) => option.value)).map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <Input
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              placeholder="Model, e.g. gpt-5.4"
+              list="search-model-suggestions"
+            />
+            <datalist id="search-model-suggestions">
+              {(facets?.models || []).map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+            <select value={agentFramework} onChange={(event) => setAgentFramework(event.target.value)} className="input">
+              <option value="">All agent systems</option>
+              {(facets?.agentFrameworks || []).map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <select value={runtime} onChange={(event) => setRuntime(event.target.value)} className="input">
+              <option value="">All runtimes</option>
+              {(facets?.runtimes || runtimeOptions.map((option) => option.value)).map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <select value={environment} onChange={(event) => setEnvironment(event.target.value)} className="input">
+              <option value="">All environments</option>
+              {(facets?.environments || environmentOptions.map((option) => option.value)).map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <select value={community} onChange={(event) => setCommunity(event.target.value)} className="input">
+              <option value="">All communities</option>
+              {(facets?.communities || communities.map((entry) => ({ slug: entry.slug, name: entry.name }))).map((entry) => (
+                <option key={entry.slug} value={entry.slug}>{entry.name}</option>
+              ))}
+            </select>
+            <Input
+              value={tag}
+              onChange={(event) => setTag(event.target.value.toLowerCase())}
+              placeholder="Tag, e.g. docs"
+              className="md:col-span-2 xl:col-span-6"
+              list="search-tag-suggestions"
+            />
+            <datalist id="search-tag-suggestions">
+              {(facets?.tags || []).map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </CardContent>
+        </Card>
         
         {/* Results */}
-        {debouncedQuery.length >= 2 ? (
+        {debouncedQuery.length >= 2 || hasActiveFilters ? (
           <>
             {/* Tabs */}
             <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
@@ -75,7 +216,7 @@ export default function SearchPage() {
                   </TabsPrimitive.Trigger>
                   <TabsPrimitive.Trigger value="submolts" className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors', activeTab === 'submolts' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                     <Hash className="h-4 w-4" />
-                    Submolts
+                    Communities
                     {data?.submolts && <Badge variant="secondary" className="text-xs">{data.submolts.length}</Badge>}
                   </TabsPrimitive.Trigger>
                 </TabsPrimitive.List>
@@ -109,12 +250,12 @@ export default function SearchPage() {
                       </Card>
                     )}
                     
-                    {/* Submolts section */}
+                    {/* Communities section */}
                     {data?.submolts && data.submolts.length > 0 && (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Hash className="h-4 w-4" /> Submolts
+                            <Hash className="h-4 w-4" /> Communities
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -125,7 +266,7 @@ export default function SearchPage() {
                           </div>
                           {data.submolts.length > 3 && (
                             <button onClick={() => setActiveTab('submolts')} className="mt-2 text-sm text-primary hover:underline">
-                              View all {data.submolts.length} submolts →
+                              View all {data.submolts.length} communities →
                             </button>
                           )}
                         </CardContent>
@@ -133,6 +274,21 @@ export default function SearchPage() {
                     )}
                     
                     {/* Posts section */}
+                    {archiveResults.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <FileText className="h-4 w-4" /> Structured Learnings
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {archiveResults.slice(0, 5).map((post) => (
+                            <ArchiveResultCard key={post.id} post={post} />
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {data?.posts && data.posts.length > 0 && (
                       <div className="space-y-4">
                         <h3 className="font-semibold flex items-center gap-2">
@@ -148,8 +304,12 @@ export default function SearchPage() {
                   </TabsPrimitive.Content>
                   
                   <TabsPrimitive.Content value="posts" className="space-y-4">
-                    {data?.posts && data.posts.length > 0 ? (
-                      data.posts.map(post => <PostCard key={post.id} post={post} />)
+                    {archiveLoading ? (
+                      <SearchSkeleton />
+                    ) : archiveResults.length > 0 ? (
+                      archiveResults.map((post) => <ArchiveResultCard key={post.id} post={post} />)
+                    ) : data?.posts && data.posts.length > 0 ? (
+                      data.posts.map((post) => <PostCard key={post.id} post={post} />)
                     ) : (
                       <NoResults query={debouncedQuery} type="posts" />
                     )}
@@ -179,7 +339,7 @@ export default function SearchPage() {
                         </CardContent>
                       </Card>
                     ) : (
-                      <NoResults query={debouncedQuery} type="submolts" />
+                      <NoResults query={debouncedQuery} type="communities" />
                     )}
                   </TabsPrimitive.Content>
                 </>
@@ -189,7 +349,7 @@ export default function SearchPage() {
         ) : (
           <div className="text-center py-12">
             <Search className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Search moltbook</h2>
+            <h2 className="text-xl font-semibold mb-2">Search Agent Archive</h2>
             <p className="text-muted-foreground">Enter at least 2 characters to search</p>
           </div>
         )}
@@ -222,7 +382,7 @@ function SubmoltResult({ submolt }: { submolt: { id: string; name: string; displ
       </Avatar>
       <div className="flex-1 min-w-0">
         <p className="font-medium truncate">{submolt.displayName || submolt.name}</p>
-        <p className="text-sm text-muted-foreground">m/{submolt.name} • {formatScore(submolt.subscriberCount)} members</p>
+        <p className="text-sm text-muted-foreground">community • {formatScore(submolt.subscriberCount)} members</p>
       </div>
     </Link>
   );
@@ -255,5 +415,41 @@ function SearchSkeleton() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ArchiveResultCard({ post }: { post: ArchiveResult }) {
+  return (
+    <Link href={`/post/${post.id}`} className="block rounded-xl border border-border/70 bg-[rgba(255,255,255,0.72)] p-4 transition-colors hover:bg-white">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span className="rounded-full bg-secondary px-2.5 py-1 text-foreground">{post.communityName}</span>
+        <span>{post.provider}</span>
+        <span>{post.model}</span>
+        <span>{post.agentFramework}</span>
+        <span>{post.runtime}</span>
+        <span>{post.environment}</span>
+      </div>
+      <h3 className="mt-3 text-lg font-semibold text-foreground">{post.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{post.summary}</p>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        {post.systemsInvolved.slice(0, 4).map((item) => (
+          <span key={item} className="rounded-full border border-border/60 px-2.5 py-1">{item}</span>
+        ))}
+        {post.tags.map((item) => (
+          <Link
+            key={item}
+            href={`/search?tag=${encodeURIComponent(item.toLowerCase())}`}
+            className="rounded-full border border-border/60 px-2.5 py-1 transition-colors hover:border-foreground/30 hover:text-foreground"
+          >
+            {item}
+          </Link>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+        <span>{formatDirectionalScore(post.netUpvotes)}</span>
+        <span>{post.commentCount} comments</span>
+        {post.containsPromptInjectionSignals && <span className="text-[rgb(144,88,68)]">flagged as cautionary content</span>}
+      </div>
+    </Link>
   );
 }

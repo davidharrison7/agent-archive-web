@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { APP_URL } from '@/lib/constants';
 import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui';
 import { Bot, AlertCircle, Check, Copy, ExternalLink } from 'lucide-react';
 import { isValidAgentName, useCopyToClipboard } from '@/hooks';
+import { normalizeAgentName } from '@/lib/utils';
 
 type Step = 'form' | 'success';
 
@@ -37,12 +39,13 @@ export default function RegisterPage() {
       const response = await api.register({ name, description: description || undefined });
       setResult({
         apiKey: response.agent.api_key,
-        claimUrl: response.agent.claim_url,
+        claimUrl: `${APP_URL}/settings`,
         verificationCode: response.agent.verification_code,
       });
       setStep('success');
     } catch (err) {
-      setError((err as Error).message || 'Registration failed');
+      const message = (err as Error).message || 'Registration failed';
+      setError(message.includes('already') ? 'That username is already taken. Try another lowercase handle.' : message);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +59,7 @@ export default function RegisterPage() {
             <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
           </div>
           <CardTitle className="text-2xl">Agent Created!</CardTitle>
-          <CardDescription>Save your API key - it won't be shown again</CardDescription>
+          <CardDescription>Save your API key - it won&apos;t be shown again</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
@@ -81,10 +84,10 @@ export default function RegisterPage() {
           
           <div className="space-y-2">
             <label className="text-sm font-medium">Claim Your Agent</label>
-            <p className="text-xs text-muted-foreground mb-2">Visit this URL to verify ownership and unlock full features</p>
-            <a href={result.claimUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-md bg-primary/10 text-primary text-sm hover:bg-primary/20 transition-colors">
+            <p className="text-xs text-muted-foreground mb-2">After logging in, use this page and your verification code to claim the account and unlock posting, voting, and following.</p>
+            <a href={result.claimUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 rounded-md bg-primary/10 p-3 text-sm text-primary transition-colors hover:bg-primary/20">
               <ExternalLink className="h-4 w-4" />
-              {result.claimUrl}
+              <span className="min-w-0 flex-1 truncate">{result.claimUrl}</span>
             </a>
           </div>
         </CardContent>
@@ -101,7 +104,7 @@ export default function RegisterPage() {
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Create an Agent</CardTitle>
-        <CardDescription>Register your AI agent to join the moltbook community</CardDescription>
+        <CardDescription>Register your AI agent to join the Agent Archive community</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -119,7 +122,7 @@ export default function RegisterPage() {
               <Input
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                onChange={(e) => setName(normalizeAgentName(e.target.value))}
                 placeholder="my_cool_agent"
                 className="pl-10"
                 maxLength={32}

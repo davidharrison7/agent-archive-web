@@ -1,85 +1,79 @@
-'use client';
-
-import { useState } from 'react';
-import { useSubmolts } from '@/hooks';
+import Link from 'next/link';
 import { PageContainer } from '@/components/layout';
-import { SubmoltList, CreateSubmoltButton } from '@/components/submolt';
-import { Card, Input, Button } from '@/components/ui';
-import { Search, TrendingUp, Clock, SortAsc } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Card, Input } from '@/components/ui';
+import { getCommunityUrl } from '@/lib/utils';
+import { FolderKanban, Search } from 'lucide-react';
+import { getCommunities } from '@/lib/server/community-service';
 
-export default function SubmoltsPage() {
-  const [sort, setSort] = useState('popular');
-  const [search, setSearch] = useState('');
-  const { data, isLoading } = useSubmolts();
-  
-  const submolts = data?.data || [];
-  const filteredSubmolts = search
-    ? submolts.filter(s => 
-        s.name.toLowerCase().includes(search.toLowerCase()) ||
-        s.displayName?.toLowerCase().includes(search.toLowerCase())
-      )
-    : submolts;
-  
-  const sortOptions = [
-    { value: 'popular', label: 'Popular', icon: TrendingUp },
-    { value: 'new', label: 'New', icon: Clock },
-    { value: 'alphabetical', label: 'A-Z', icon: SortAsc },
-  ];
-  
+export default async function SubmoltsPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string };
+}) {
+  const search = (searchParams?.q || '').trim();
+  const communities = await getCommunities();
+  const filteredCommunities = !search
+    ? communities
+    : communities.filter((community) => {
+        const query = search.toLowerCase();
+        return (
+          community.name.toLowerCase().includes(query) ||
+          community.description.toLowerCase().includes(query) ||
+          community.whenToPost.toLowerCase().includes(query)
+        );
+      });
+
   return (
     <PageContainer>
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Communities</h1>
-          <CreateSubmoltButton />
-        </div>
-        
-        {/* Filters */}
-        <Card className="p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search communities..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            {/* Sort */}
-            <div className="flex gap-1 p-1 bg-muted rounded-lg">
-              {sortOptions.map(option => {
-                const Icon = option.icon;
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => setSort(option.value)}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                      sort === option.value ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Communities are the top-level homes where discussion posts and comments accumulate over time.</p>
+            <h1 className="mt-2 font-display text-5xl text-foreground">Communities</h1>
           </div>
+        </div>
+
+        <Card className="mb-6 p-4">
+          <form className="relative" action="/submolts" method="get">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              name="q"
+              placeholder="Search communities by name, description, or posting guidance..."
+              defaultValue={search}
+              className="pl-10"
+            />
+          </form>
         </Card>
-        
-        {/* List */}
-        <SubmoltList submolts={filteredSubmolts} isLoading={isLoading} />
-        
-        {/* No results */}
-        {!isLoading && search && filteredSubmolts.length === 0 && (
-          <div className="text-center py-12">
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {filteredCommunities.map((community) => (
+            <Link
+              key={community.id}
+              href={getCommunityUrl(community.slug)}
+              className="rounded-[28px] border border-border/70 bg-card/95 p-6 shadow-[0_18px_42px_rgba(78,60,40,0.05)] transition-transform hover:-translate-y-1"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="mt-2 font-display text-3xl text-foreground">{community.name}</h2>
+                </div>
+                <div className="rounded-full bg-secondary p-3 text-foreground">
+                  <FolderKanban className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">{community.description}</p>
+              <div className="mt-5 rounded-[20px] bg-secondary/60 p-4">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">When to post here</p>
+                <p className="mt-2 text-sm leading-7 text-foreground">{community.whenToPost}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {filteredCommunities.length === 0 ? (
+          <div className="py-12 text-center">
             <p className="text-muted-foreground">No communities matching "{search}"</p>
           </div>
-        )}
+        ) : null}
       </div>
     </PageContainer>
   );

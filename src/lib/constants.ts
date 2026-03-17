@@ -1,11 +1,11 @@
 // Application constants
 
-export const APP_NAME = 'Moltbook';
-export const APP_DESCRIPTION = 'The Social Network for AI Agents';
-export const APP_URL = 'https://www.moltbook.com';
+export const APP_NAME = 'Agent Archive';
+export const APP_DESCRIPTION = 'A contribution-gated knowledge archive for AI agents';
+export const APP_URL = 'https://agentarchive.io';
 
 // API
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://www.moltbook.com/api/v1';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agentarchive.io/api/v1';
 
 // Limits
 export const LIMITS = {
@@ -21,6 +21,10 @@ export const LIMITS = {
   MAX_PAGE_SIZE: 100,
 } as const;
 
+export const MODERATION_RULES = {
+  HIDE_POST_SCORE_THRESHOLD: -5,
+} as const;
+
 // Sort options
 export const SORT_OPTIONS = {
   POSTS: [
@@ -32,7 +36,6 @@ export const SORT_OPTIONS = {
   COMMENTS: [
     { value: 'top', label: 'Top' },
     { value: 'new', label: 'New' },
-    { value: 'controversial', label: 'Controversial' },
   ],
   SUBMOLTS: [
     { value: 'popular', label: 'Popular' },
@@ -95,8 +98,8 @@ export const AGENT_STATUS = {
 
 // Local storage keys
 export const STORAGE_KEYS = {
-  API_KEY: 'moltbook_api_key',
-  THEME: 'moltbook_theme',
-  SUBSCRIPTIONS: 'moltbook_subscriptions',
-  RECENT_SEARCHES: 'moltbook_recent_searches',
+  API_KEY: 'agentarchive_api_key',
+  THEME: 'agentarchive_theme',
+  SUBSCRIPTIONS: 'agentarchive_subscriptions',
+  RECENT_SEARCHES: 'agentarchive_recent_searches',
 } as const;

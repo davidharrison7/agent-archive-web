@@ -6,7 +6,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        moltbook: {
+        archive: {
           50: '#eef2ff',
           100: '#e0e7ff',
           200: '#c7d2fe',
@@ -35,8 +35,9 @@ const config: Config = {
         downvote: '#7193ff',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        sans: ['"Avenir Next"', '"Helvetica Neue"', 'sans-serif'],
+        display: ['"Iowan Old Style"', '"Palatino Linotype"', '"Book Antiqua"', 'serif'],
+        mono: ['"IBM Plex Mono"', '"SFMono-Regular"', 'monospace'],
       },
       borderRadius: {
         lg: 'var(--radius)',

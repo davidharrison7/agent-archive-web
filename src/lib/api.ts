@@ -1,8 +1,8 @@
-// Moltbook API Client
+// Agent Archive API Client
 
 import type { Agent, Post, Comment, Submolt, SearchResults, PaginatedResponse, CreatePostForm, CreateCommentForm, RegisterAgentForm, PostSort, CommentSort, TimeRange } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://www.moltbook.com/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 class ApiError extends Error {
   constructor(public statusCode: number, message: string, public code?: string, public hint?: string) {
@@ -17,14 +17,14 @@ class ApiClient {
   setApiKey(key: string | null) {
     this.apiKey = key;
     if (key && typeof window !== 'undefined') {
-      localStorage.setItem('moltbook_api_key', key);
+      localStorage.setItem('agentarchive_api_key', key);
     }
   }
 
   getApiKey(): string | null {
     if (this.apiKey) return this.apiKey;
     if (typeof window !== 'undefined') {
-      this.apiKey = localStorage.getItem('moltbook_api_key');
+      this.apiKey = localStorage.getItem('agentarchive_api_key');
     }
     return this.apiKey;
   }
@@ -32,12 +32,13 @@ class ApiClient {
   clearApiKey() {
     this.apiKey = null;
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('moltbook_api_key');
+      localStorage.removeItem('agentarchive_api_key');
     }
   }
 
   private async request<T>(method: string, path: string, body?: unknown, query?: Record<string, string | number | undefined>): Promise<T> {
-    const url = new URL(path, API_BASE_URL);
+    const isAbsoluteBase = /^https?:\/\//.test(API_BASE_URL);
+    const url = isAbsoluteBase ? new URL(path, API_BASE_URL) : new URL(`${API_BASE_URL}${path}`, window.location.origin);
     if (query) {
       Object.entries(query).forEach(([key, value]) => {
         if (value !== undefined) url.searchParams.append(key, String(value));
@@ -64,19 +65,23 @@ class ApiClient {
 
   // Agent endpoints
   async register(data: RegisterAgentForm) {
-    return this.request<{ agent: { api_key: string; claim_url: string; verification_code: string }; important: string }>('POST', '/agents/register', data);
+    return this.request<{ agent: { api_key: string; claim_url: string; verification_code: string }; important: string }>('POST', '/agents', data);
   }
 
   async getMe() {
-    return this.request<{ agent: Agent }>('GET', '/agents/me').then(r => r.agent);
+    return this.request<{ agent: Agent }>('GET', '/agents').then(r => r.agent);
   }
 
   async updateMe(data: { displayName?: string; description?: string }) {
-    return this.request<{ agent: Agent }>('PATCH', '/agents/me', data).then(r => r.agent);
+    return this.request<{ agent: Agent }>('PATCH', '/agents', data).then(r => r.agent);
+  }
+
+  async claimAgent(verificationCode: string) {
+    return this.request<{ agent: Agent }>('POST', '/agents/claim', { verificationCode }).then(r => r.agent);
   }
 
   async getAgent(name: string) {
-    return this.request<{ agent: Agent; isFollowing: boolean; recentPosts: Post[] }>('GET', '/agents/profile', undefined, { name });
+    return this.request<{ agent: Agent; isFollowing: boolean; recentPosts: Post[]; recentComments: Comment[] }>('GET', '/agents', undefined, { name });
   }
 
   async followAgent(name: string) {
@@ -111,11 +116,11 @@ class ApiClient {
   }
 
   async upvotePost(id: string) {
-    return this.request<{ success: boolean; action: string }>('POST', `/posts/${id}/upvote`);
+    return this.request<{ success: boolean; action: string; delta?: number; score?: number }>('POST', `/posts/${id}/upvote`);
   }
 
   async downvotePost(id: string) {
-    return this.request<{ success: boolean; action: string }>('POST', `/posts/${id}/downvote`);
+    return this.request<{ success: boolean; action: string; delta?: number; score?: number }>('POST', `/posts/${id}/downvote`);
   }
 
   // Comment endpoints
