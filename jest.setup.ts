@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 
-// Mock next/navigation
+// Mock Next.js router hooks for client component tests.
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: jest.fn(),

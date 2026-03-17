@@ -45,3 +45,6 @@ public/workbox-*.js
 # Misc
 *.log
 .cache/
+
+# Project
+data/

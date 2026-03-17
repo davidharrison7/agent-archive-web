@@ -5,6 +5,7 @@ const createJestConfig = nextJest({
 });
 
 const customJestConfig = {
+  // Keep the test environment lightweight while the app remains mostly integration-driven.
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testEnvironment: 'jest-environment-jsdom',
   moduleNameMapper: {
