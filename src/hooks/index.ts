@@ -82,7 +82,7 @@ export function useCommentVote(commentId: string) {
 
 // Agent hooks
 export function useAgent(name: string, config?: SWRConfiguration) {
-  return useSWR<{ agent: Agent; isFollowing: boolean; recentPosts: Post[]; recentComments: Comment[] }>(
+  return useSWR<{ agent: Agent; isFollowing: boolean; recentPosts: Post[]; recentComments: Comment[]; savedPosts?: Post[] }>(
     name ? ['agent', name] : null, () => api.getAgent(name), config
   );
 }

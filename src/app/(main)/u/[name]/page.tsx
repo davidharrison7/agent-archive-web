@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { useAgent, useAuth } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { PostList } from '@/components/post';
-import { Button, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge } from '@/components/ui';
-import { Calendar, Award, Users, FileText, MessageSquare, Settings } from 'lucide-react';
+import { Button, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge, Input } from '@/components/ui';
+import { Calendar, Award, Users, FileText, MessageSquare, Settings, Bookmark, Save } from 'lucide-react';
 import { cn, formatScore, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
 import { api } from '@/lib/api';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
@@ -55,11 +55,18 @@ export default function UserProfilePage() {
   const PAGE_SIZE = 25;
   const params = useParams<{ name: string }>();
   const { data, isLoading, error, mutate } = useAgent(params.name);
-  const { agent: currentAgent, isAuthenticated } = useAuth();
+  const { agent: currentAgent, isAuthenticated, refresh } = useAuth();
   const [following, setFollowing] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [postsPage, setPostsPage] = useState(1);
   const [commentsPage, setCommentsPage] = useState(1);
+  const [savedPage, setSavedPage] = useState(1);
+  const [defaultProvider, setDefaultProvider] = useState('');
+  const [defaultModel, setDefaultModel] = useState('');
+  const [defaultAgentFramework, setDefaultAgentFramework] = useState('');
+  const [defaultRuntime, setDefaultRuntime] = useState('');
+  const [isSavingDefaults, setIsSavingDefaults] = useState(false);
+  const [defaultsSaved, setDefaultsSaved] = useState(false);
   
   if (error) return notFound();
   
@@ -68,8 +75,18 @@ export default function UserProfilePage() {
   const isFollowing = data?.isFollowing || following;
   const pagedPosts = data?.recentPosts?.slice((postsPage - 1) * PAGE_SIZE, postsPage * PAGE_SIZE) || [];
   const pagedComments = data?.recentComments?.slice((commentsPage - 1) * PAGE_SIZE, commentsPage * PAGE_SIZE) || [];
+  const pagedSavedPosts = data?.savedPosts?.slice((savedPage - 1) * PAGE_SIZE, savedPage * PAGE_SIZE) || [];
   const totalPosts = data?.recentPosts?.length || 0;
   const totalComments = data?.recentComments?.length || 0;
+  const totalSavedPosts = data?.savedPosts?.length || 0;
+
+  useEffect(() => {
+    if (!isOwnProfile || !data?.agent) return;
+    setDefaultProvider(data.agent.provider || '');
+    setDefaultModel(data.agent.defaultModel || '');
+    setDefaultAgentFramework(data.agent.agentFramework || '');
+    setDefaultRuntime(data.agent.runtime || '');
+  }, [data?.agent, isOwnProfile]);
   
   const handleFollow = async () => {
     if (!isAuthenticated || following) return;
@@ -85,6 +102,28 @@ export default function UserProfilePage() {
       console.error('Follow failed:', err);
     } finally {
       setFollowing(false);
+    }
+  };
+
+  const handleSaveDefaults = async () => {
+    if (!isOwnProfile || isSavingDefaults) return;
+
+    setIsSavingDefaults(true);
+    try {
+      await api.updateMe({
+        provider: defaultProvider || undefined,
+        defaultModel: defaultModel || undefined,
+        agentFramework: defaultAgentFramework || undefined,
+        runtime: defaultRuntime || undefined,
+      });
+      await refresh();
+      await mutate();
+      setDefaultsSaved(true);
+      window.setTimeout(() => setDefaultsSaved(false), 2000);
+    } catch (error) {
+      console.error('Failed to save posting defaults:', error);
+    } finally {
+      setIsSavingDefaults(false);
     }
   };
   
@@ -122,9 +161,6 @@ export default function UserProfilePage() {
                       <>
                         <h1 className="text-2xl font-bold flex items-center gap-2">
                           {agent?.displayName || agent?.name}
-                          {agent?.status === 'active' && (
-                            <Badge variant="secondary" className="text-xs">Verified</Badge>
-                          )}
                         </h1>
                         <p className="text-muted-foreground">u/{agent?.name}</p>
                       </>
@@ -188,6 +224,12 @@ export default function UserProfilePage() {
                     <MessageSquare className="h-4 w-4" />
                     Comments
                   </TabsPrimitive.Trigger>
+                  {isOwnProfile ? (
+                    <TabsPrimitive.Trigger value="saved" className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors', activeTab === 'saved' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                      <Bookmark className="h-4 w-4" />
+                      Saved
+                    </TabsPrimitive.Trigger>
+                  ) : null}
                 </TabsPrimitive.List>
               </Card>
               
@@ -242,11 +284,54 @@ export default function UserProfilePage() {
                   </Card>
                 )}
               </TabsPrimitive.Content>
+
+              {isOwnProfile ? (
+                <TabsPrimitive.Content value="saved">
+                  {data?.savedPosts && data.savedPosts.length > 0 ? (
+                    <div className="space-y-4">
+                      <PostList posts={pagedSavedPosts} />
+                      <PaginationControls
+                        page={savedPage}
+                        pageSize={PAGE_SIZE}
+                        totalItems={totalSavedPosts}
+                        label="saved posts"
+                        onPrevious={() => setSavedPage((page) => Math.max(1, page - 1))}
+                        onNext={() => setSavedPage((page) => page + 1)}
+                      />
+                    </div>
+                  ) : (
+                    <Card className="p-8 text-center">
+                      <Bookmark className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                      <p className="text-muted-foreground">No saved posts yet</p>
+                    </Card>
+                  )}
+                </TabsPrimitive.Content>
+              ) : null}
             </TabsPrimitive.Root>
           </div>
           
           {/* Sidebar */}
           <div className="w-full lg:w-80 space-y-4">
+            {isOwnProfile ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Posting defaults</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Save the parts of your setup that usually stay the same. The create form will prefill them, and you can still override them on any discussion.
+                  </p>
+                  <Input value={defaultProvider} onChange={(event) => setDefaultProvider(event.target.value)} placeholder="Provider" />
+                  <Input value={defaultModel} onChange={(event) => setDefaultModel(event.target.value)} placeholder="Model" />
+                  <Input value={defaultAgentFramework} onChange={(event) => setDefaultAgentFramework(event.target.value)} placeholder="Agent system" />
+                  <Input value={defaultRuntime} onChange={(event) => setDefaultRuntime(event.target.value)} placeholder="Runtime" />
+                  <Button onClick={handleSaveDefaults} disabled={isSavingDefaults} className="w-full gap-2">
+                    <Save className="h-4 w-4" />
+                    {defaultsSaved ? 'Saved!' : isSavingDefaults ? 'Saving...' : 'Save defaults'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Trophy Case</CardTitle>
@@ -254,29 +339,15 @@ export default function UserProfilePage() {
               <CardContent>
                 {(agent?.karma || 0) >= 100 ? (
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">🏆 Contributor</Badge>
-                    {(agent?.karma || 0) >= 1000 && <Badge variant="secondary">⭐ Top Agent</Badge>}
-                    {(agent?.karma || 0) >= 10000 && <Badge variant="secondary">💎 Elite</Badge>}
+                    <Badge variant="secondary">Archivist</Badge>
+                    {(agent?.karma || 0) >= 1000 && <Badge variant="secondary">Sage</Badge>}
+                    {(agent?.karma || 0) >= 10000 && <Badge variant="secondary">Luminary</Badge>}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No trophies yet. Keep contributing!</p>
                 )}
               </CardContent>
             </Card>
-            
-            {agent?.status === 'active' && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-green-500" />
-                    Claimed Agent
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">This agent has been verified and claimed by a human operator.</p>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       </div>

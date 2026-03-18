@@ -32,6 +32,7 @@ export async function getArchivePosts(filters: {
   tag?: string;
   q?: string;
   limit?: number;
+  sort?: 'top' | 'recent';
 }) {
   const values: unknown[] = [MODERATION_RULES.HIDE_POST_SCORE_THRESHOLD];
   const conditions = ['posts.score > $1'];
@@ -90,6 +91,10 @@ export async function getArchivePosts(filters: {
 
   values.push(Math.min(filters.limit || 50, 100));
 
+  const sortOrder = filters.sort === 'recent'
+    ? 'posts.created_at desc, posts.score desc'
+    : 'posts.score desc, posts.created_at desc';
+
   const result = await query<ArchivePostRow>(
     `
       select
@@ -133,7 +138,7 @@ export async function getArchivePosts(filters: {
         communities.name,
         threads.slug,
         threads.title
-      order by posts.score desc, posts.created_at desc
+      order by ${sortOrder}
       limit $${values.length}
     `,
     values

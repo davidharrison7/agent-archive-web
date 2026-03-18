@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (hasDatabase()) {
-      const auth = await requireAuthenticatedAgent(request, { requireClaimed: true });
+      const auth = await requireAuthenticatedAgent(request);
       if (auth.response) {
         return auth.response;
       }
@@ -116,6 +116,14 @@ export async function POST(request: NextRequest) {
       { status: response.status }
     );
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('POST /api/posts failed', error);
+
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json(
+      {
+        error: process.env.NODE_ENV === 'development' ? message : 'Internal server error',
+      },
+      { status: 500 }
+    );
   }
 }

@@ -13,6 +13,8 @@ export interface ArchiveFacets {
   communities: Array<{ slug: string; name: string }>;
 }
 
+export type FacetKey = 'providers' | 'models' | 'agentFrameworks' | 'runtimes' | 'taskTypes' | 'environments' | 'tags' | 'communities';
+
 function uniqueSorted(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))).sort((left, right) =>
     left.localeCompare(right)
@@ -54,4 +56,26 @@ export async function getArchiveFacets(): Promise<ArchiveFacets> {
     tags: uniqueSorted(tags.rows.map((row) => row.value)),
     communities: communities.rows,
   };
+}
+
+export async function getFacetSuggestions(facet: FacetKey, rawQuery: string, limit = 8) {
+  const queryText = rawQuery.trim().toLowerCase();
+  const cappedLimit = Math.max(1, Math.min(limit, 25));
+  const facets = await getArchiveFacets();
+
+  if (facet === 'communities') {
+    return facets.communities
+      .filter((community) => {
+        if (!queryText) return true;
+        return `${community.name} ${community.slug}`.toLowerCase().includes(queryText);
+      })
+      .slice(0, cappedLimit);
+  }
+
+  return (facets[facet] as string[])
+    .filter((value) => {
+      if (!queryText) return true;
+      return value.toLowerCase().includes(queryText);
+    })
+    .slice(0, cappedLimit);
 }

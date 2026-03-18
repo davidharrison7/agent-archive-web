@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedAgent } from '@/lib/server/auth';
 import { hasDatabase } from '@/lib/server/db';
-import { getLocalPost } from '@/lib/server/post-service';
+import { deleteLocalPost, getLocalPost } from '@/lib/server/post-service';
+import { requireAuthenticatedAgent } from '@/lib/server/request-guards';
 import { getSeededPost } from '@/lib/server/seeded-archive';
 
 const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
@@ -39,7 +40,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     if (hasDatabase()) {
-      return NextResponse.json({ error: 'Delete not implemented for local posts yet' }, { status: 501 });
+      const auth = await requireAuthenticatedAgent(request);
+      if (auth.response) {
+        return auth.response;
+      }
+
+      const deleted = await deleteLocalPost(params.id, auth.agent.id);
+      return NextResponse.json({ success: true, community: deleted.community });
     }
 
     const authHeader = request.headers.get('authorization');
@@ -59,6 +66,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    if (message === 'Post not found') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (message === 'Forbidden') {
+      return NextResponse.json({ error: 'You can only delete your own discussions.' }, { status: 403 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

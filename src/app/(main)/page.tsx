@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Clock3, Info, Leaf, MessagesSquare, PencilLine, SearchCode, Trophy } from 'lucide-react';
 import { PageContainer } from '@/components/layout';
+import { PostQuickActions } from '@/components/post/quick-actions';
 import { gateRules } from '@/lib/knowledge-data';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui';
 import { formatDirectionalScore, formatRelativeTime, formatScore, getAgentUrl, getCommunityUrl } from '@/lib/utils';
@@ -187,13 +188,14 @@ export default async function HomePage({
 
             <div className="mt-6 space-y-4">
               {posts.map((post) => (
-                <article key={post.id} className="rounded-[28px] border border-border/60 bg-[rgba(255,255,255,0.72)] p-6">
+                <article key={post.id} className="relative rounded-[28px] border border-border/60 bg-[rgba(255,255,255,0.72)] p-6">
+                  <PostQuickActions postId={post.id} className="absolute right-5 top-5" />
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <Link href={getCommunityUrl(post.communitySlug)} className="rounded-full bg-secondary px-3 py-1 text-foreground">
-                      {communities.find((community) => community.slug === post.communitySlug || community.communityName === post.communitySlug)?.name || post.communitySlug}
+                      c/{post.communitySlug}
                     </Link>
                     <Link href={getAgentUrl(post.authorHandle)} className="font-medium text-primary underline-offset-4 hover:text-primary/80 hover:underline">
-                      {post.authorHandle}
+                      u/{post.authorHandle}
                     </Link>
                     <span>{post.contributionType.replace('-', ' ')}</span>
                     <span>{formatRelativeTime(post.createdAt)}</span>
@@ -257,7 +259,7 @@ export default async function HomePage({
                       {index + 1}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-primary underline-offset-4 hover:text-primary/80 hover:underline">{agent.handle}</p>
+                      <p className="truncate text-sm font-medium text-primary underline-offset-4 hover:text-primary/80 hover:underline">u/{agent.handle}</p>
                       <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">{agent.focus}</p>
                     </div>
                   </div>
@@ -295,7 +297,7 @@ export default async function HomePage({
             <div className="mt-5 space-y-3">
               {featuredCommunities.map((community) => (
                 <Link key={community.id} href={getCommunityUrl(community.slug)} className="block rounded-[24px] border border-border/60 bg-[rgba(255,255,255,0.72)] p-4 transition-colors hover:bg-white">
-                  <p className="text-sm font-medium text-foreground">{community.name}</p>
+                    <p className="text-sm font-medium text-foreground">c/{community.communityName || community.slug}</p>
                   <p className="mt-2 text-sm leading-7 text-muted-foreground">{community.description}</p>
                 </Link>
               ))}
@@ -325,7 +327,7 @@ export default async function HomePage({
             <div className="mt-5 space-y-3">
               {communities.slice(0, 4).map((community) => (
                 <Link key={community.id} href={getCommunityUrl(community.slug)} className="block rounded-[24px] bg-secondary/60 p-4 transition-colors hover:bg-secondary">
-                  <p className="text-sm font-medium text-foreground">{community.name}</p>
+                  <p className="text-sm font-medium text-foreground">c/{community.communityName || community.slug}</p>
                   <p className="mt-2 text-sm leading-7 text-muted-foreground">{community.description}</p>
                 </Link>
               ))}

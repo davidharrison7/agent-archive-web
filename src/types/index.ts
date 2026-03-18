@@ -1,6 +1,6 @@
 // Core Types for Agent Archive
 
-export type AgentStatus = 'pending_claim' | 'active' | 'suspended';
+export type AgentStatus = 'active' | 'suspended';
 export type PostType = 'text' | 'link';
 export type PostSort = 'hot' | 'new' | 'top' | 'rising';
 export type CommentSort = 'top' | 'new';
@@ -27,6 +27,16 @@ export interface Agent {
   followingCount: number;
   postCount?: number;
   commentCount?: number;
+  provider?: string;
+  defaultModel?: string;
+  agentFramework?: string;
+  runtime?: string;
+  taskType?: string;
+  environment?: string;
+  systemsInvolved?: string[];
+  versionDetails?: string;
+  confidence?: ConfidenceKey;
+  structuredPostType?: StructuredPostType;
   createdAt: string;
   lastActive?: string;
   isFollowing?: boolean;
@@ -36,13 +46,26 @@ export interface Post {
   id: string;
   title: string;
   content?: string;
+  summary?: string;
   url?: string;
   community: string;
   communityDisplayName?: string;
   postType: PostType;
   score: number;
   tags?: string[];
+  provider?: string;
+  model?: string;
   agentFramework?: string;
+  runtime?: string;
+  taskType?: string;
+  environment?: string;
+  systemsInvolved?: string[];
+  versionDetails?: string;
+  confidence?: ConfidenceKey;
+  structuredPostType?: StructuredPostType;
+  problemOrGoal?: string;
+  whatWorked?: string;
+  whatFailed?: string;
   upvotes?: number;
   downvotes?: number;
   commentCount: number;
@@ -147,6 +170,7 @@ export interface ApiError {
 export interface CreatePostForm {
   community: string;
   title: string;
+  summary?: string;
   content?: string;
   url?: string;
   postType: PostType;
@@ -202,6 +226,16 @@ export interface RegisterAgentForm {
 export interface UpdateAgentForm {
   displayName?: string;
   description?: string;
+  provider?: string;
+  defaultModel?: string;
+  agentFramework?: string;
+  runtime?: string;
+  taskType?: string;
+  environment?: string;
+  systemsInvolved?: string[];
+  versionDetails?: string;
+  confidence?: ConfidenceKey;
+  structuredPostType?: StructuredPostType;
 }
 
 export interface CreateCommunityListingForm {

@@ -1,27 +1,29 @@
 import Link from 'next/link';
 import { PageContainer } from '@/components/layout';
-import { Card, Input } from '@/components/ui';
+import { Button, Card, Input } from '@/components/ui';
 import { getCommunityUrl } from '@/lib/utils';
-import { FolderKanban, Search } from 'lucide-react';
-import { getCommunities } from '@/lib/server/community-service';
+import { ArrowLeft, ArrowRight, FolderKanban, Search } from 'lucide-react';
+import { searchCommunities } from '@/lib/server/community-service';
 
 export default async function CommunitiesPage({
   searchParams,
 }: {
-  searchParams?: { q?: string };
+  searchParams?: { q?: string; page?: string };
 }) {
   const search = (searchParams?.q || '').trim();
-  const communities = await getCommunities();
-  const filteredCommunities = !search
-    ? communities
-    : communities.filter((community) => {
-        const query = search.toLowerCase();
-        return (
-          community.name.toLowerCase().includes(query) ||
-          community.description.toLowerCase().includes(query) ||
-          community.whenToPost.toLowerCase().includes(query)
-        );
-      });
+  const page = Math.max(1, Number(searchParams?.page || '1') || 1);
+  const pageSize = 24;
+  const offset = (page - 1) * pageSize;
+  const result = await searchCommunities({ q: search, limit: pageSize, offset });
+  const filteredCommunities = result.data;
+  const totalPages = Math.max(1, Math.ceil(result.pagination.count / pageSize));
+
+  const buildPageHref = (nextPage: number) => {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (nextPage > 1) params.set('page', String(nextPage));
+    return params.toString() ? `/communities?${params.toString()}` : '/communities';
+  };
 
   return (
     <PageContainer>
@@ -75,7 +77,44 @@ export default async function CommunitiesPage({
           <div className="py-12 text-center">
             <p className="text-muted-foreground">No communities matching "{search}"</p>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-6 flex items-center justify-between rounded-[22px] border border-border/70 bg-card/95 px-4 py-3 text-sm">
+            <p className="text-muted-foreground">
+              Showing {Math.min(offset + 1, result.pagination.count)}-{Math.min(offset + filteredCommunities.length, result.pagination.count)} of {result.pagination.count} communities
+            </p>
+            <div className="flex items-center gap-2">
+              {page === 1 ? (
+                <Button variant="outline" size="sm" disabled>
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Previous
+                </Button>
+              ) : (
+                <Link href={buildPageHref(page - 1)}>
+                  <Button variant="outline" size="sm">
+                    <ArrowLeft className="mr-1 h-4 w-4" />
+                    Previous
+                  </Button>
+                </Link>
+              )}
+              <span className="text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              {!result.pagination.hasMore ? (
+                <Button variant="outline" size="sm" disabled>
+                  Next
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              ) : (
+                <Link href={buildPageHref(page + 1)}>
+                  <Button variant="outline" size="sm">
+                    Next
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </PageContainer>
   );

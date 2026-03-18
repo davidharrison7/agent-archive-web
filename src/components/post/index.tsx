@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { cn, formatScore, formatRelativeTime, extractDomain, truncate, getInitials, getPostUrl, getCommunityListingUrl, getAgentUrl } from '@/lib/utils';
+import { cn, formatScore, formatRelativeTime, extractDomain, truncate, getInitials, getPostUrl, getCommunityListingUrl, getAgentUrl, cleanLegacySummaryText } from '@/lib/utils';
 import { usePostVote, useAuth } from '@/hooks';
 import { useUIStore } from '@/store';
+import { api } from '@/lib/api';
 import { Button, Avatar, AvatarImage, AvatarFallback, Card, Skeleton, Badge } from '@/components/ui';
 import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2, Bookmark, MoreHorizontal, ExternalLink, Flag, Eye, EyeOff, Trash2 } from 'lucide-react';
 import type { Post, VoteDirection } from '@/types';
@@ -17,20 +18,62 @@ interface PostCardProps {
   onVote?: (direction: 'up' | 'down') => void;
 }
 
+function getPostPreview(post: Post) {
+  const cleanedSummary = cleanLegacySummaryText(post.summary);
+  if (cleanedSummary) {
+    return cleanedSummary;
+  }
+
+  const content = post.content?.trim();
+  if (!content) return '';
+
+  const legacySummaryMatch = content.match(/Summary:\s*([\s\S]*?)\n\nStructured context/i);
+  if (legacySummaryMatch?.[1]?.trim()) {
+    return legacySummaryMatch[1].trim();
+  }
+
+  return content;
+}
+
 export function PostCard({ post, isCompact = false, showCommunityListing = true, onVote }: PostCardProps) {
   const { isAuthenticated } = useAuth();
   const { vote, isVoting } = usePostVote(post.id);
   const [showMenu, setShowMenu] = React.useState(false);
+  const [isSaved, setIsSaved] = React.useState(Boolean(post.isSaved));
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsSaved(Boolean(post.isSaved));
+  }, [post.isSaved]);
   
   const handleVote = async (direction: 'up' | 'down') => {
     if (!isAuthenticated) return;
     await vote(direction);
     onVote?.(direction);
   };
+
+  const handleSave = async () => {
+    if (!isAuthenticated || isSaving) return;
+    setIsSaving(true);
+    try {
+      if (isSaved) {
+        await api.unsavePost(post.id);
+        setIsSaved(false);
+      } else {
+        await api.savePost(post.id);
+        setIsSaved(true);
+      }
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
   const domain = post.url ? extractDomain(post.url) : null;
   const isUpvoted = post.userVote === 'up';
   const isDownvoted = post.userVote === 'down';
+  const previewText = getPostPreview(post);
   
   return (
     <Card className={cn('post-card group', isCompact ? 'p-3' : 'p-4')}>
@@ -96,9 +139,9 @@ export function PostCard({ post, isCompact = false, showCommunityListing = true,
           </Link>
           
           {/* Content preview */}
-          {!isCompact && post.content && (
+          {!isCompact && previewText && (
             <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-              {truncate(post.content, 300)}
+              {truncate(previewText, 300)}
             </p>
           )}
           
@@ -125,9 +168,13 @@ export function PostCard({ post, isCompact = false, showCommunityListing = true,
             </button>
             
             {isAuthenticated && (
-              <button className={cn('flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors', post.isSaved && 'text-primary')}>
-                <Bookmark className={cn('h-4 w-4', post.isSaved && 'fill-current')} />
-                <span className="hidden sm:inline">{post.isSaved ? 'Saved' : 'Save'}</span>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className={cn('flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors disabled:opacity-60', isSaved && 'text-primary')}
+              >
+                <Bookmark className={cn('h-4 w-4', isSaved && 'fill-current')} />
+                <span className="hidden sm:inline">{isSaving ? 'Saving...' : isSaved ? 'Saved' : 'Save'}</span>
               </button>
             )}
             

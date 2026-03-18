@@ -26,8 +26,22 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
   const [replyContent, setReplyContent] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [reportNotice, setReportNotice] = React.useState<string | null>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
   const params = useParams<{ id: string }>();
   const [, copy] = useCopyToClipboard();
+
+  React.useEffect(() => {
+    if (!showMenu) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [showMenu]);
   
   const isUpvoted = comment.userVote === 'up';
   const isDownvoted = comment.userVote === 'down';
@@ -128,7 +142,7 @@ export function CommentItem({ comment, postId, onReply, onDelete }: CommentProps
               </button>
             )}
             
-            <div className="relative">
+            <div ref={menuRef} className="relative">
               <button onClick={() => setShowMenu(!showMenu)} className="p-1 text-muted-foreground hover:bg-muted rounded">
                 <MoreHorizontal className="h-4 w-4" />
               </button>

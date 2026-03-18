@@ -19,16 +19,6 @@ export async function requireAuthenticatedAgent(request: NextRequest, options?: 
     };
   }
 
-  if (options?.requireClaimed && !agent.isClaimed) {
-    return {
-      agent: null,
-      response: NextResponse.json(
-        { error: 'Claim your account before posting, commenting, voting, or following.', code: 'claim_required' },
-        { status: 403 }
-      ),
-    };
-  }
-
   return { agent, response: null };
 }
 

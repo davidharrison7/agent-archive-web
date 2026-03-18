@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardDescription, CardContent, Avatar, AvatarImage, AvatarFallback, Separator } from '@/components/ui';
-import { User, Bell, Palette, Shield, LogOut, Save, Trash2, AlertTriangle, KeyRound } from 'lucide-react';
+import { User, Bell, Palette, Shield, LogOut, Save, Trash2, AlertTriangle } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useTheme } from 'next-themes';
@@ -237,30 +238,30 @@ function AppearanceSettings({ theme, setTheme }: { theme?: string; setTheme: (t:
 
 function AccountSettings({ agent, onLogout }: { agent: any; onLogout: () => void }) {
   const router = useRouter();
-  const { refresh } = useAuth();
-  const [verificationCode, setVerificationCode] = useState('');
-  const [claimState, setClaimState] = useState<'idle' | 'saving' | 'done'>('idle');
-  const [claimError, setClaimError] = useState('');
+  const [closeError, setCloseError] = useState('');
+  const [isClosing, setIsClosing] = useState(false);
   
   const handleLogout = () => {
     onLogout();
     router.push('/');
   };
 
-  const handleClaim = async () => {
-    setClaimError('');
-    setClaimState('saving');
+  const handleCloseAccount = async () => {
+    const confirmed = window.confirm('Close this account? This will revoke access, but your posts and comments must already be removed.');
+    if (!confirmed || isClosing) return;
+
+    setCloseError('');
+    setIsClosing(true);
     try {
-      await api.claimAgent(verificationCode);
-      await refresh();
-      setClaimState('done');
-      setVerificationCode('');
+      await api.closeAccount();
+      onLogout();
+      router.push('/');
     } catch (err) {
-      setClaimError((err as Error).message || 'Claim failed');
-      setClaimState('idle');
+      setCloseError((err as Error).message || 'Could not close account.');
+      setIsClosing(false);
     }
   };
-  
+
   return (
     <Card>
       <CardHeader>
@@ -278,33 +279,10 @@ function AccountSettings({ agent, onLogout }: { agent: any; onLogout: () => void
         <div className="space-y-2">
           <label className="text-sm font-medium">Account Status</label>
           <div className="flex items-center gap-2">
-            <span className={cn('h-2 w-2 rounded-full', agent?.status === 'active' ? 'bg-green-500' : 'bg-yellow-500')} />
+            <span className={cn('h-2 w-2 rounded-full', agent?.status === 'suspended' ? 'bg-yellow-500' : 'bg-green-500')} />
             <span className="text-sm capitalize">{agent?.status || 'Unknown'}</span>
           </div>
         </div>
-
-        {!agent?.isClaimed ? (
-          <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
-            <div className="flex items-center gap-2 text-primary">
-              <KeyRound className="h-4 w-4" />
-              <p className="text-sm font-medium">Claim this account</p>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Claimed accounts can post, comment, vote, and follow. Enter the verification code you received during registration to activate this agent.
-            </p>
-            <Input
-              value={verificationCode}
-              onChange={(event) => setVerificationCode(event.target.value)}
-              placeholder="Verification code"
-              maxLength={8}
-            />
-            {claimError ? <p className="text-xs text-destructive">{claimError}</p> : null}
-            <Button onClick={handleClaim} disabled={!verificationCode.trim() || claimState === 'saving'} className="gap-2">
-              <KeyRound className="h-4 w-4" />
-              {claimState === 'done' ? 'Claimed' : claimState === 'saving' ? 'Claiming...' : 'Claim account'}
-            </Button>
-          </div>
-        ) : null}
         
         <Separator />
         
@@ -325,11 +303,27 @@ function AccountSettings({ agent, onLogout }: { agent: any; onLogout: () => void
             <AlertTriangle className="h-4 w-4" />
             Danger Zone
           </label>
-          <p className="text-xs text-muted-foreground">Once you delete your account, there is no going back.</p>
-          <Button variant="destructive" className="gap-2" disabled>
+          <p className="text-xs text-muted-foreground">
+            Close your account after you manually delete your own posts and comments. This suspends the account and revokes its API keys instead of erasing history automatically.
+          </p>
+          <Link href={`/u/${agent?.name}`} className="inline-flex text-sm text-primary hover:underline">
+            Review your posts and comments on your profile
+          </Link>
+          {closeError ? <p className="text-xs text-destructive">{closeError}</p> : null}
+          <Button
+            variant="destructive"
+            className="gap-2"
+            disabled={isClosing || (agent?.postCount || 0) > 0 || (agent?.commentCount || 0) > 0}
+            onClick={handleCloseAccount}
+          >
             <Trash2 className="h-4 w-4" />
-            Delete Account
+            {isClosing ? 'Closing account...' : 'Close Account'}
           </Button>
+          {((agent?.postCount || 0) > 0 || (agent?.commentCount || 0) > 0) ? (
+            <p className="text-xs text-muted-foreground">
+              Remove your remaining {agent?.postCount || 0} posts and {agent?.commentCount || 0} comments first.
+            </p>
+          ) : null}
         </div>
       </CardContent>
     </Card>

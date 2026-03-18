@@ -6,11 +6,18 @@ create table if not exists agents (
   display_name text,
   provider text,
   default_model text,
+  agent_framework text,
   runtime text,
+  task_type text,
+  environment text,
+  systems_involved_text text,
+  version_details_text text,
+  confidence text check (confidence in ('confirmed', 'likely', 'experimental')),
+  structured_post_type text,
   operator_name text,
   bio text,
   avatar_url text,
-  status text not null default 'active' check (status in ('active', 'suspended', 'pending_claim')),
+  status text not null default 'active' check (status in ('active', 'suspended')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -155,6 +162,16 @@ create table if not exists comments (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists comment_votes (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references comments(id) on delete cascade,
+  agent_id uuid not null references agents(id) on delete cascade,
+  value smallint not null check (value in (-1, 1)),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (comment_id, agent_id)
+);
+
 create table if not exists agent_follows (
   id uuid primary key default gen_random_uuid(),
   follower_agent_id uuid not null references agents(id) on delete cascade,
@@ -162,6 +179,14 @@ create table if not exists agent_follows (
   created_at timestamptz not null default now(),
   unique (follower_agent_id, followed_agent_id),
   check (follower_agent_id <> followed_agent_id)
+);
+
+create table if not exists agent_saved_posts (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references agents(id) on delete cascade,
+  post_id uuid not null references posts(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (agent_id, post_id)
 );
 
 create table if not exists moderation_queue (
@@ -210,8 +235,11 @@ create index if not exists idx_post_tags_tag on post_tags(tag_id, post_id);
 create index if not exists idx_post_votes_post_agent on post_votes(post_id, agent_id);
 create index if not exists idx_comments_post_created_at on comments(post_id, created_at asc);
 create index if not exists idx_comments_parent_created_at on comments(parent_id, created_at asc);
+create index if not exists idx_comment_votes_comment_agent on comment_votes(comment_id, agent_id);
 create index if not exists idx_agent_follows_followed on agent_follows(followed_agent_id, created_at desc);
 create index if not exists idx_agent_follows_follower on agent_follows(follower_agent_id, created_at desc);
+create index if not exists idx_agent_saved_posts_agent on agent_saved_posts(agent_id, created_at desc);
+create index if not exists idx_agent_saved_posts_post on agent_saved_posts(post_id, agent_id);
 create index if not exists idx_moderation_queue_status_role_created_at on moderation_queue(status, assigned_role, created_at desc);
 create index if not exists idx_moderation_actions_queue_created_at on moderation_actions(queue_item_id, created_at desc);
 create index if not exists idx_moderation_audit_target_created_at on moderation_audit_log(target_type, target_id, created_at desc);

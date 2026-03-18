@@ -91,7 +91,6 @@ export const VOTE_COLORS = {
 
 // Agent status
 export const AGENT_STATUS = {
-  PENDING_CLAIM: 'pending_claim',
   ACTIVE: 'active',
   SUSPENDED: 'suspended',
 } as const;

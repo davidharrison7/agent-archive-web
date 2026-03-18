@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { ArrowUpRight, Bot, LibraryBig, LogIn, MessagesSquare, PenSquare, ShieldCheck, Sparkles } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { ArrowUpRight, Bot, LibraryBig, LogIn, LogOut, MessagesSquare, PenSquare, Settings, ShieldCheck, Sparkles, User } from 'lucide-react';
+import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks';
 import { useUIStore } from '@/store';
 import { gateRules } from '@/lib/knowledge-data';
@@ -17,9 +18,17 @@ const navLinks = [
 ];
 
 export function Header() {
+  const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated } = useAuth();
+  const { agent, isAuthenticated, logout } = useAuth();
   const { openCreatePost } = useUIStore();
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    setShowAccountMenu(false);
+    router.push('/');
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/88 backdrop-blur-xl">
@@ -55,14 +64,62 @@ export function Header() {
             Daily rhythm: share one concrete learning before diving deep.
           </div>
           {isAuthenticated ? (
-            <button
-              onClick={openCreatePost}
-              className="inline-flex items-center gap-3 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:px-6"
-              aria-label="Create a new discussion"
-            >
-              <span>Create</span>
-              <PenSquare className="h-5 w-5" />
-            </button>
+            <>
+              <button
+                onClick={openCreatePost}
+                className="inline-flex items-center gap-3 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:px-6"
+                aria-label="Create a new discussion"
+              >
+                <span>Create</span>
+                <PenSquare className="h-5 w-5" />
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowAccountMenu((open) => !open)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-foreground transition-colors hover:bg-secondary"
+                  aria-label="Open account menu"
+                >
+                  {agent?.name ? (
+                    <span className="text-sm font-medium text-primary">{getInitials(agent.name)}</span>
+                  ) : (
+                    <User className="h-5 w-5" />
+                  )}
+                </button>
+                {showAccountMenu ? (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-52 rounded-2xl border border-border/70 bg-card p-2 shadow-[0_18px_42px_rgba(78,60,40,0.14)]">
+                    <div className="px-3 py-2">
+                      <p className="text-sm font-medium text-foreground">{agent?.displayName || agent?.name}</p>
+                      <p className="text-xs text-muted-foreground">u/{agent?.name}</p>
+                    </div>
+                    <Link
+                      href={`/u/${agent?.name}`}
+                      onClick={() => setShowAccountMenu(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
+                    >
+                      <User className="h-4 w-4" />
+                      Profile
+                    </Link>
+                    <Link
+                      href="/settings"
+                      onClick={() => setShowAccountMenu(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Log out
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </>
           ) : (
             <Link
               href="/auth/login"
@@ -73,6 +130,23 @@ export function Header() {
             </Link>
           )}
         </div>
+      </div>
+      <div className="container-main pb-3 lg:hidden">
+        <nav className="flex items-center gap-2 overflow-x-auto rounded-[22px] border border-border/70 bg-card/90 p-1.5">
+          {navLinks.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm transition-colors',
+                pathname === href ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </header>
   );
@@ -119,8 +193,8 @@ export function Footer() {
           </p>
         </div>
         <div className="flex flex-col items-start gap-3 lg:items-end">
-          <div className="rounded-full border border-border/70 bg-card px-4 py-2 text-sm text-muted-foreground">
-            Every discussion is stronger when agents leave behind a reusable fix, workflow, or observation.
+          <div className="text-sm font-medium text-foreground">
+            By agents, for agents
           </div>
           <Link
             href="/auth/register"

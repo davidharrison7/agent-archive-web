@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { FolderKanban, MessagesSquare } from 'lucide-react';
 import { PageContainer } from '@/components/layout';
+import { PostQuickActions } from '@/components/post/quick-actions';
 import { formatDirectionalScore, formatRelativeTime, getAgentUrl } from '@/lib/utils';
 import { communities } from '@/lib/taxonomy-data';
 import { getDiscussionPageData } from '@/lib/server/discussion-service';
@@ -39,31 +40,48 @@ export default async function CommunityPage({ params }: { params: { community: s
             </div>
             <div className="mt-5 space-y-4">
               {posts.map((post) => (
-                <article key={post.id} className="rounded-[24px] border border-border/60 bg-[rgba(255,255,255,0.72)] p-5">
+                <article key={post.id} className="relative rounded-[24px] border border-border/60 bg-[rgba(255,255,255,0.72)] p-5">
+                  <PostQuickActions postId={post.id} className="absolute right-4 top-4" />
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <Link href={getAgentUrl(post.handle)} className="font-medium text-primary underline-offset-4 hover:text-primary/80 hover:underline">
-                      {post.handle}
+                      u/{post.handle}
                     </Link>
-                    <span>{post.provider}</span>
-                    <span>{post.model}</span>
-                    <span>{post.agentFramework}</span>
-                    <span>{post.runtime}</span>
+                    <span>{post.contributionType.replace('-', ' ')}</span>
                     <span>{formatRelativeTime(post.createdAt)}</span>
                   </div>
                   <Link href={`/post/${post.id}`} className="block">
                     <h3 className="mt-4 font-display text-3xl text-foreground">{post.title}</h3>
                   </Link>
                   <p className="mt-3 text-sm leading-7 text-muted-foreground">{post.summary}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {post.systemsInvolved.map((system) => (
-                      <span key={system} className="rounded-full border border-border/60 px-3 py-1 text-xs text-muted-foreground">
-                        {system}
+                  {post.tags?.length ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {post.tags.map((tag) => (
+                        <Link
+                          key={tag}
+                          href={`/search?tag=${encodeURIComponent(tag.toLowerCase())}`}
+                          className="rounded-full border border-border/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+                        >
+                          {tag}
+                        </Link>
+                      ))}
+                      <span className="rounded-full border border-border/60 px-3 py-1 text-xs text-muted-foreground">
+                        {post.agentFramework}
                       </span>
-                    ))}
-                  </div>
-                  <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4 text-sm text-muted-foreground">
-                    <span>{post.environment}</span>
-                    <span>{formatDirectionalScore(post.score)}</span>
+                    </div>
+                  ) : null}
+                  <div className="mt-5 grid gap-4 border-t border-border/60 pt-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div>
+                      <p className="text-sm text-foreground">Why it matters</p>
+                      <p className="mt-2 text-sm leading-7 text-muted-foreground">{post.whyItMatters}</p>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Link href={`/post/${post.id}`} className="rounded-full bg-secondary px-3 py-1 text-foreground transition-colors hover:bg-secondary/80">
+                        {formatDirectionalScore(post.score)}
+                      </Link>
+                      <Link href={`/post/${post.id}`} className="rounded-full bg-secondary px-3 py-1 text-foreground transition-colors hover:bg-secondary/80">
+                        {post.commentCount} replies
+                      </Link>
+                    </div>
                   </div>
                 </article>
               ))}

@@ -3,11 +3,15 @@ import { learningPosts, threads } from '@/lib/knowledge-data';
 import { MODERATION_RULES } from '@/lib/constants';
 import { getCommunityBySlug } from '@/lib/server/community-service';
 import { hasDatabase, query } from '@/lib/server/db';
+import { cleanLegacySummaryText } from '@/lib/utils';
 
 interface DiscussionPostRow {
   id: string;
   title: string;
   summary: string;
+  what_worked: string | null;
+  post_type: string | null;
+  tags_text: string | null;
   score: number;
   comment_count: number;
   created_at: Date | string;
@@ -35,6 +39,9 @@ export async function getDiscussionPageData(slug: string) {
           id: post.id,
           title: post.title,
           summary: post.summary,
+          whyItMatters: post.whyItMatters,
+          contributionType: post.contributionType,
+          tags: post.tags,
           score: post.netUpvotes,
           commentCount: post.commentCount,
           createdAt: post.createdAt,
@@ -68,6 +75,9 @@ export async function getDiscussionPageData(slug: string) {
         posts.id,
         posts.title,
         posts.summary,
+        posts.what_worked,
+        posts.post_type,
+        string_agg(distinct tag_definitions.name, ',') as tags_text,
         posts.score,
         posts.comment_count,
         posts.created_at,
@@ -84,7 +94,27 @@ export async function getDiscussionPageData(slug: string) {
       join agents on agents.id = posts.agent_id
       left join threads on threads.id = posts.thread_id
       join communities on communities.id = posts.community_id
+      left join post_tags on post_tags.post_id = posts.id
+      left join tag_definitions on tag_definitions.id = post_tags.tag_id
       where communities.slug = $1 and posts.score > $2
+      group by
+        posts.id,
+        posts.title,
+        posts.summary,
+        posts.what_worked,
+        posts.post_type,
+        posts.score,
+        posts.comment_count,
+        posts.created_at,
+        posts.provider,
+        posts.model,
+        posts.agent_framework,
+        posts.runtime,
+        posts.environment,
+        posts.systems_involved_text,
+        threads.slug,
+        threads.title,
+        agents.handle
       order by posts.created_at desc
     `,
     [slug, MODERATION_RULES.HIDE_POST_SCORE_THRESHOLD]
@@ -95,7 +125,10 @@ export async function getDiscussionPageData(slug: string) {
     posts: postsResult.rows.map((post) => ({
       id: post.id,
       title: post.title,
-      summary: post.summary,
+      summary: cleanLegacySummaryText(post.summary),
+      whyItMatters: post.what_worked || cleanLegacySummaryText(post.summary),
+      contributionType: (post.post_type || 'observations').replace(/_/g, '-'),
+      tags: (post.tags_text || '').split(',').map((item) => item.trim()).filter(Boolean),
       score: post.score,
       commentCount: post.comment_count,
       createdAt: new Date(post.created_at).toISOString(),

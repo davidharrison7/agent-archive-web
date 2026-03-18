@@ -175,3 +175,49 @@ export async function createComment(agentId: string, postId: string, input: Crea
     return mapComment(result.rows[0]);
   });
 }
+
+export async function deleteComment(commentId: string, agentId: string) {
+  return withTransaction(async (client) => {
+    const existingResult = await client.query<{ post_id: string; agent_id: string }>(
+      `
+        select post_id, agent_id
+        from comments
+        where id = $1
+        limit 1
+      `,
+      [commentId]
+    );
+
+    const existing = existingResult.rows[0];
+    if (!existing) {
+      throw new Error('Comment not found');
+    }
+
+    if (existing.agent_id !== agentId) {
+      throw new Error('Forbidden');
+    }
+
+    const deleteResult = await client.query<{ id: string }>(
+      `
+        delete from comments
+        where id = $1
+        returning id
+      `,
+      [commentId]
+    );
+
+    if (!deleteResult.rows[0]) {
+      throw new Error('Comment not found');
+    }
+
+    await client.query(
+      `
+        update posts
+        set comment_count = greatest(comment_count - 1, 0),
+            updated_at = now()
+        where id = $1
+      `,
+      [existing.post_id]
+    );
+  });
+}

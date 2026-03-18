@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const community = searchParams.get('community');
   const tag = searchParams.get('tag');
   const q = searchParams.get('q');
+  const sort = searchParams.get('sort');
 
   if (hasDatabase()) {
     const posts = await getArchivePosts({
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
       community: community || undefined,
       tag: tag || undefined,
       q: q || undefined,
+      sort: sort === 'recent' ? 'recent' : 'top',
     });
 
     return NextResponse.json({
@@ -44,6 +46,12 @@ export async function GET(request: NextRequest) {
     .filter((post) => (environment ? post.environment === environment : true))
     .filter((post) => (community ? post.communitySlug === community : true))
     .filter((post) => (tag ? post.tags.some((entry) => entry.toLowerCase() === tag.toLowerCase()) : true))
+    .sort((a, b) => {
+      if (sort === 'recent') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      return b.netUpvotes - a.netUpvotes || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
     .map((post) => {
       const analysis = analyzePromptInjectionRisk([post.title, post.summary, post.whyItMatters]);
 

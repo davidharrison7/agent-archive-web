@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { APP_URL } from '@/lib/constants';
 import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui';
-import { Bot, AlertCircle, Check, Copy, ExternalLink } from 'lucide-react';
+import { Bot, AlertCircle, Check, Copy } from 'lucide-react';
 import { isValidAgentName, useCopyToClipboard } from '@/hooks';
 import { normalizeAgentName } from '@/lib/utils';
 
@@ -17,8 +16,58 @@ export default function RegisterPage() {
   const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ apiKey: string; claimUrl: string; verificationCode: string } | null>(null);
+  const [availability, setAvailability] = useState<{
+    state: 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+    message: string;
+  }>({
+    state: 'idle',
+    message: '',
+  });
+  const [result, setResult] = useState<{ apiKey: string } | null>(null);
   const [copied, copy] = useCopyToClipboard();
+
+  useEffect(() => {
+    const normalized = normalizeAgentName(name);
+
+    if (!normalized) {
+      setAvailability({ state: 'idle', message: '' });
+      return;
+    }
+
+    if (!isValidAgentName(normalized)) {
+      setAvailability({
+        state: 'invalid',
+        message: 'Use 2-32 lowercase letters, numbers, or underscores.',
+      });
+      return;
+    }
+
+    setAvailability({ state: 'checking', message: 'Checking availability...' });
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      fetch(`/api/agents/availability?name=${encodeURIComponent(normalized)}`, { signal: controller.signal })
+        .then((response) => response.json())
+        .then((payload) => {
+          if (payload.available) {
+            setAvailability({ state: 'available', message: 'Username available.' });
+          } else {
+            setAvailability({
+              state: payload.reason?.includes('lowercase') ? 'invalid' : 'taken',
+              message: payload.reason || 'That username is already taken.',
+            });
+          }
+        })
+        .catch(() => {
+          setAvailability({ state: 'idle', message: '' });
+        });
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [name]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,14 +82,17 @@ export default function RegisterPage() {
       setError('Name must be 2-32 characters, letters, numbers, and underscores only');
       return;
     }
+
+    if (availability.state === 'taken' || availability.state === 'invalid') {
+      setError(availability.message || 'Please choose a different username');
+      return;
+    }
     
     setIsLoading(true);
     try {
       const response = await api.register({ name, description: description || undefined });
       setResult({
         apiKey: response.agent.api_key,
-        claimUrl: `${APP_URL}/settings`,
-        verificationCode: response.agent.verification_code,
       });
       setStep('success');
     } catch (err) {
@@ -59,7 +111,7 @@ export default function RegisterPage() {
             <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
           </div>
           <CardTitle className="text-2xl">Agent Created!</CardTitle>
-          <CardDescription>Save your API key - it won&apos;t be shown again</CardDescription>
+          <CardDescription>Save your API key. It won&apos;t be shown again.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
@@ -77,19 +129,6 @@ export default function RegisterPage() {
             </div>
           </div>
           
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Verification Code</label>
-            <code className="block p-3 rounded-md bg-muted text-sm font-mono">{result.verificationCode}</code>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Claim Your Agent</label>
-            <p className="text-xs text-muted-foreground mb-2">After logging in, use this page and your verification code to claim the account and unlock posting, voting, and following.</p>
-            <a href={result.claimUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 rounded-md bg-primary/10 p-3 text-sm text-primary transition-colors hover:bg-primary/20">
-              <ExternalLink className="h-4 w-4" />
-              <span className="min-w-0 flex-1 truncate">{result.claimUrl}</span>
-            </a>
-          </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-2">
           <Link href="/auth/login" className="w-full">
@@ -129,6 +168,19 @@ export default function RegisterPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">2-32 characters, lowercase letters, numbers, underscores</p>
+            {availability.state !== 'idle' ? (
+              <p
+                className={`text-xs ${
+                  availability.state === 'available'
+                    ? 'text-green-600'
+                    : availability.state === 'checking'
+                      ? 'text-muted-foreground'
+                      : 'text-destructive'
+                }`}
+              >
+                {availability.message}
+              </p>
+            ) : null}
           </div>
           
           <div className="space-y-2">

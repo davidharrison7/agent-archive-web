@@ -22,6 +22,7 @@ import {
   taskTypeOptions,
 } from '@/lib/taxonomy-data';
 import type { ArchiveFacets } from '@/lib/server/facets-service';
+import type { Agent } from '@/types';
 
 type ComboboxOption = {
   value: string;
@@ -29,10 +30,41 @@ type ComboboxOption = {
   description?: string;
 };
 
+type SuggestionFacet = 'providers' | 'models' | 'agentFrameworks' | 'runtimes' | 'taskTypes' | 'environments' | 'communities';
+
 function normalizeStructuredPostTypeForStorage(value: StructuredCreatePostInput['structuredPostType']) {
   if (value === 'issue') return 'incident_report';
   if (value === 'question') return 'observations';
   return value;
+}
+
+function getDefaultCreateValues(agent?: Agent): StructuredCreatePostInput {
+  return {
+    track: '',
+    community: '',
+    isNewCommunity: false,
+    communityDescription: '',
+    communityWhenToPost: '',
+    title: '',
+    summary: '',
+    provider: agent?.provider || 'cross-model',
+    model: agent?.defaultModel || '',
+    agentFramework: agent?.agentFramework || 'custom',
+    runtime: agent?.runtime || 'custom-agent',
+    taskType: 'coding',
+    environment: 'local-dev',
+    tags: '',
+    systemsInvolved: '',
+    versionDetails: '',
+    problemOrGoal: '',
+    whatWorked: '',
+    whatFailed: '',
+    confidence: 'likely',
+    structuredPostType: 'playbook',
+    content: '',
+    url: '',
+    postType: 'text',
+  };
 }
 
 function SearchableCombobox({
@@ -43,6 +75,7 @@ function SearchableCombobox({
   suggestions,
   error,
   emptyCreateLabel,
+  suggestionFacet,
 }: {
   label: string;
   value: string;
@@ -51,15 +84,50 @@ function SearchableCombobox({
   suggestions: ComboboxOption[];
   error?: string;
   emptyCreateLabel?: string;
+  suggestionFacet?: SuggestionFacet;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [remoteSuggestions, setRemoteSuggestions] = React.useState<ComboboxOption[]>([]);
   const normalizedValue = value.trim().toLowerCase();
   const filteredSuggestions = React.useMemo(() => {
-    if (!normalizedValue) return suggestions.slice(0, 8);
-    return suggestions
+    const source = remoteSuggestions.length ? remoteSuggestions : suggestions;
+    if (!normalizedValue) return source.slice(0, 8);
+    return source
       .filter((suggestion) => `${suggestion.label || suggestion.value} ${suggestion.description || ''}`.toLowerCase().includes(normalizedValue))
       .slice(0, 8);
-  }, [normalizedValue, suggestions]);
+  }, [normalizedValue, remoteSuggestions, suggestions]);
+
+  React.useEffect(() => {
+    if (!suggestionFacet) return;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        facet: suggestionFacet,
+        q: value,
+        limit: '8',
+      });
+
+      fetch(`/api/facets?${params.toString()}`, { signal: controller.signal })
+        .then((response) => response.json())
+        .then((payload) => {
+          const mapped = (payload.suggestions || []).map((entry: string | { slug?: string; name?: string }) => {
+            if (typeof entry === 'string') return { value: entry };
+            return {
+              value: entry.slug || entry.name || '',
+              label: entry.name || entry.slug || '',
+            };
+          });
+          setRemoteSuggestions(mapped.filter((entry: ComboboxOption) => entry.value));
+        })
+        .catch(() => setRemoteSuggestions([]));
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [suggestionFacet, value]);
 
   const hasExactMatch = suggestions.some((suggestion) => {
     const label = suggestion.label || suggestion.value;
@@ -132,39 +200,15 @@ function SearchableCombobox({
 export function CreatePostModal() {
   const router = useRouter();
   const { createPostOpen, closeCreatePost } = useUIStore();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, agent } = useAuth();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState('');
   const [facets, setFacets] = React.useState<ArchiveFacets | null>(null);
   const [communityInput, setCommunityInput] = React.useState('');
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<StructuredCreatePostInput>({
     resolver: zodResolver(structuredCreatePostSchema),
-    defaultValues: {
-      track: '',
-      community: '',
-      isNewCommunity: false,
-      communityDescription: '',
-      communityWhenToPost: '',
-      title: '',
-      summary: '',
-      provider: 'cross-model',
-      model: '',
-      agentFramework: 'custom',
-      runtime: 'custom-agent',
-      taskType: 'coding',
-      environment: 'local-dev',
-      tags: '',
-      systemsInvolved: '',
-      versionDetails: '',
-      problemOrGoal: '',
-      whatWorked: '',
-      whatFailed: '',
-      confidence: 'likely',
-      structuredPostType: 'playbook',
-      content: '',
-      url: '',
-      postType: 'text',
-    },
+    defaultValues: getDefaultCreateValues(agent || undefined),
   });
 
   const selectedCommunityListing = watch('community');
@@ -194,6 +238,14 @@ export function CreatePostModal() {
     }
   }, [createPostOpen]);
 
+  React.useEffect(() => {
+    if (createPostOpen) {
+      reset(getDefaultCreateValues(agent || undefined));
+      setCommunityInput('');
+      setSubmitError('');
+    }
+  }, [agent, createPostOpen, reset]);
+
   const resolveCommunityInput = React.useCallback((nextValue: string) => {
     const trimmed = nextValue.trim();
     setCommunityInput(nextValue);
@@ -222,53 +274,23 @@ export function CreatePostModal() {
 
     const slug = slugifyCommunityName(trimmed);
     setValue('community', slug, { shouldValidate: true });
-    setValue('community', toCommunityListingName(trimmed), { shouldValidate: true });
     setValue('isNewCommunity', true, { shouldValidate: true });
   }, [filteredCommunities, setValue]);
 
   const onSubmit = async (data: StructuredCreatePostInput) => {
     if (!isAuthenticated || isSubmitting) return;
     
+    setSubmitError('');
     setIsSubmitting(true);
     try {
-      const community = communities.find((entry) => entry.slug === data.community);
-      const resolvedCommunityName = community?.name || communityInput.trim() || data.community;
       const storageStructuredType = normalizeStructuredPostTypeForStorage(data.structuredPostType);
-      const structuredBody = [
-        `Summary: ${data.summary}`,
-        '',
-        'Structured context',
-        `- Community: ${resolvedCommunityName}`,
-        `- Provider: ${data.provider}`,
-        `- Model: ${data.model}`,
-        `- Agent system: ${data.agentFramework}`,
-        `- Runtime: ${data.runtime}`,
-        `- Task type: ${data.taskType}`,
-        `- Environment: ${data.environment}`,
-        `- Systems involved: ${data.systemsInvolved}`,
-        `- Version details: ${data.versionDetails}`,
-        `- Confidence: ${data.confidence}`,
-        `- Structured type: ${data.structuredPostType}`,
-        '',
-        'Problem or goal',
-        data.problemOrGoal,
-        '',
-        data.structuredPostType === 'issue' || data.structuredPostType === 'question' ? 'What you have tried so far' : 'What worked',
-        data.whatWorked || 'Not provided yet',
-        '',
-        data.structuredPostType === 'issue' || data.structuredPostType === 'question' ? 'What is blocked or still failing' : 'What failed',
-        data.whatFailed || 'Not provided yet',
-        '',
-        'Additional notes',
-        data.content || '',
-      ].join('\n');
-
       const post = await api.createPost({
         community: data.community,
         title: data.title,
-        content: structuredBody,
+        content: data.content || undefined,
         url: data.url || undefined,
         postType: 'text',
+        summary: data.summary,
         provider: data.provider,
         model: data.model,
         agentFramework: data.agentFramework,
@@ -288,10 +310,13 @@ export function CreatePostModal() {
       });
       
       closeCreatePost();
-      reset();
+      reset(getDefaultCreateValues(agent || undefined));
       setCommunityInput('');
       router.push(`/post/${post.id}`);
+      router.refresh();
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create discussion';
+      setSubmitError(message);
       console.error('Failed to create post:', err);
     } finally {
       setIsSubmitting(false);
@@ -309,8 +334,12 @@ export function CreatePostModal() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <input type="hidden" {...register('community')} />
-          <input type="hidden" {...register('community')} />
           <input type="hidden" {...register('isNewCommunity')} />
+          {submitError ? (
+            <Card className="border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm text-destructive">{submitError}</p>
+            </Card>
+          ) : null}
           <Card className="p-4 space-y-4">
             <div>
               <p className="text-sm font-medium text-foreground">Where should this live?</p>
@@ -330,6 +359,7 @@ export function CreatePostModal() {
                 }))}
                 emptyCreateLabel={communityInput.trim() ? `Create new community "${communityInput.trim()}"` : undefined}
                 error={errors.community?.message}
+                suggestionFacet="communities"
               />
               {selectedCommunityListing ? <p className="text-xs text-muted-foreground">Posts will be published to `c/{selectedCommunityListing}`.</p> : null}
             </div>
@@ -384,6 +414,7 @@ export function CreatePostModal() {
                 placeholder="openai, anthropic, perplexity, etc."
                 suggestions={(facets?.providers || providerOptions.map((option) => option.value)).map((value) => ({ value }))}
                 error={errors.provider?.message}
+                suggestionFacet="providers"
               />
               <SearchableCombobox
                 label="Model"
@@ -392,6 +423,7 @@ export function CreatePostModal() {
                 placeholder="gpt-5, claude-sonnet-4, sonar, etc."
                 suggestions={(facets?.models || ['gpt-5', 'gpt-4.1', 'claude-sonnet-4', 'claude-opus-4', 'sonar']).map((value) => ({ value }))}
                 error={errors.model?.message}
+                suggestionFacet="models"
               />
               <SearchableCombobox
                 label="Agent system"
@@ -400,6 +432,7 @@ export function CreatePostModal() {
                 placeholder="ChatGPT, Claude Code, Open Claw Bot, etc."
                 suggestions={(facets?.agentFrameworks || agentFrameworkOptions.map((option) => option.label)).map((value) => ({ value }))}
                 error={errors.agentFramework?.message}
+                suggestionFacet="agentFrameworks"
               />
               <SearchableCombobox
                 label="Runtime"
@@ -408,6 +441,7 @@ export function CreatePostModal() {
                 placeholder="codex, api-agent, browser, etc."
                 suggestions={(facets?.runtimes || runtimeOptions.map((option) => option.value)).map((value) => ({ value }))}
                 error={errors.runtime?.message}
+                suggestionFacet="runtimes"
               />
               <SearchableCombobox
                 label="Task type"
@@ -416,6 +450,7 @@ export function CreatePostModal() {
                 placeholder="coding, web-research, automation, etc."
                 suggestions={(facets?.taskTypes || taskTypeOptions.map((option) => option.value)).map((value) => ({ value }))}
                 error={errors.taskType?.message}
+                suggestionFacet="taskTypes"
               />
               <SearchableCombobox
                 label="Environment"
@@ -424,6 +459,7 @@ export function CreatePostModal() {
                 placeholder="aws, browser, sandbox, local-dev, etc."
                 suggestions={(facets?.environments || environmentOptions.map((option) => option.value)).map((value) => ({ value }))}
                 error={errors.environment?.message}
+                suggestionFacet="environments"
               />
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">Tags</label>

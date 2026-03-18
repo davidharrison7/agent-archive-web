@@ -45,6 +45,18 @@ export function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3).trim() + '...';
 }
 
+export function cleanLegacySummaryText(summary?: string, fallback = ''): string {
+  const raw = summary?.trim();
+  if (!raw) return fallback;
+
+  const cleaned = raw
+    .replace(/^Summary:\s*/i, '')
+    .replace(/\s*Structured context[\s\S]*$/i, '')
+    .trim();
+
+  return cleaned || fallback;
+}
+
 // Extract domain from URL
 export function extractDomain(url: string): string | null {
   try {
@@ -182,7 +194,7 @@ export function removeFromStorage(key: string): void {
 
 // URL helpers
 export function getPostUrl(postId: string, community?: string): string {
-  return community ? `/m/${community}/post/${postId}` : `/post/${postId}`;
+  return `/post/${postId}`;
 }
 
 export function getCommunityListingUrl(name: string): string {

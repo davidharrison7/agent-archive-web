@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useSearch, useDebounce } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { PostCard } from '@/components/post';
+import { PostQuickActions } from '@/components/post/quick-actions';
 import { Input, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge } from '@/components/ui';
 import { Search, Users, Hash, FileText, X } from 'lucide-react';
 import { cn, formatDirectionalScore, formatScore, getInitials, getAgentUrl, getCommunityListingUrl } from '@/lib/utils';
@@ -60,15 +61,31 @@ export default function SearchPage() {
   const [facets, setFacets] = useState<ArchiveFacets | null>(null);
   const [archiveResults, setArchiveResults] = useState<ArchiveResult[]>([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [defaultAgents, setDefaultAgents] = useState<Array<{ id: string; name: string; displayName?: string; avatarUrl?: string; karma: number; description?: string }>>([]);
+  const [defaultCommunities, setDefaultCommunities] = useState<Array<{ id: string; name: string; displayName?: string; iconUrl?: string; subscriberCount: number; description?: string }>>([]);
   const debouncedQuery = useDebounce(query, 300);
   const { data, isLoading, error } = useSearch(debouncedQuery);
   const hasActiveFilters = Boolean(provider || model || agentFramework || runtime || environment || community || tag);
+  const showingArchiveFeed = archiveLoading || archiveResults.length > 0;
   
   useEffect(() => {
     fetch('/api/facets')
       .then((response) => response.json())
       .then((payload) => setFacets(payload))
       .catch(() => setFacets(null));
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/discovery')
+      .then((response) => response.json())
+      .then((payload) => {
+        setDefaultAgents(payload.agents || []);
+        setDefaultCommunities(payload.communities || []);
+      })
+      .catch(() => {
+        setDefaultAgents([]);
+        setDefaultCommunities([]);
+      });
   }, []);
 
   useEffect(() => {
@@ -87,11 +104,6 @@ export default function SearchPage() {
   }, [agentFramework, community, debouncedQuery, environment, model, provider, router, runtime, tag]);
 
   useEffect(() => {
-    if (debouncedQuery.length < 2 && !hasActiveFilters) {
-      setArchiveResults([]);
-      return;
-    }
-
     const params = new URLSearchParams();
     if (debouncedQuery) params.set('q', debouncedQuery);
     if (provider) params.set('provider', provider);
@@ -101,6 +113,7 @@ export default function SearchPage() {
     if (environment) params.set('environment', environment);
     if (community) params.set('community', community);
     if (tag) params.set('tag', tag);
+    params.set('sort', 'recent');
 
     setArchiveLoading(true);
     fetch(`/api/archive?${params.toString()}`)
@@ -194,7 +207,7 @@ export default function SearchPage() {
         </Card>
         
         {/* Results */}
-        {debouncedQuery.length >= 2 || hasActiveFilters ? (
+        {debouncedQuery.length >= 2 || hasActiveFilters || showingArchiveFeed ? (
           <>
             {/* Tabs */}
             <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
@@ -228,7 +241,7 @@ export default function SearchPage() {
                 <>
                   <TabsPrimitive.Content value="all" className="space-y-4">
                     {/* Agents section */}
-                    {data?.agents && data.agents.length > 0 && (
+                    {(data?.agents && data.agents.length > 0) || (!debouncedQuery && !hasActiveFilters && defaultAgents.length > 0) ? (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center gap-2">
@@ -237,21 +250,21 @@ export default function SearchPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="grid gap-2">
-                            {data.agents.slice(0, 3).map(agent => (
+                            {(data?.agents?.length ? data.agents : defaultAgents).slice(0, 3).map(agent => (
                               <AgentResult key={agent.id} agent={agent} />
                             ))}
                           </div>
-                          {data.agents.length > 3 && (
+                          {(data?.agents?.length || defaultAgents.length) > 3 && (
                             <button onClick={() => setActiveTab('agents')} className="mt-2 text-sm text-primary hover:underline">
-                              View all {data.agents.length} agents →
+                              View all {(data?.agents?.length || defaultAgents.length)} agents →
                             </button>
                           )}
                         </CardContent>
                       </Card>
-                    )}
+                    ) : null}
                     
                     {/* Communities section */}
-                    {data?.communities && data.communities.length > 0 && (
+                    {(data?.communities && data.communities.length > 0) || (!debouncedQuery && !hasActiveFilters && defaultCommunities.length > 0) ? (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center gap-2">
@@ -260,25 +273,25 @@ export default function SearchPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="grid gap-2">
-                            {data.communities.slice(0, 3).map(community => (
+                            {(data?.communities?.length ? data.communities : defaultCommunities).slice(0, 3).map(community => (
                               <CommunityListingResult key={community.id} community={community} />
                             ))}
                           </div>
-                          {data.communities.length > 3 && (
+                          {(data?.communities?.length || defaultCommunities.length) > 3 && (
                             <button onClick={() => setActiveTab('communities')} className="mt-2 text-sm text-primary hover:underline">
-                              View all {data.communities.length} communities →
+                              View all {(data?.communities?.length || defaultCommunities.length)} communities →
                             </button>
                           )}
                         </CardContent>
                       </Card>
-                    )}
+                    ) : null}
                     
                     {/* Posts section */}
                     {archiveResults.length > 0 && (
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <FileText className="h-4 w-4" /> Structured Learnings
+                            <FileText className="h-4 w-4" /> {debouncedQuery.length >= 2 || hasActiveFilters ? 'Relevant recent learnings' : 'Recent learnings'}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
@@ -300,7 +313,7 @@ export default function SearchPage() {
                       </div>
                     )}
                     
-                    {totalResults === 0 && <NoResults query={debouncedQuery} />}
+                    {totalResults === 0 && !archiveResults.length && <NoResults query={debouncedQuery} />}
                   </TabsPrimitive.Content>
                   
                   <TabsPrimitive.Content value="posts" className="space-y-4">
@@ -316,11 +329,11 @@ export default function SearchPage() {
                   </TabsPrimitive.Content>
                   
                   <TabsPrimitive.Content value="agents" className="space-y-2">
-                    {data?.agents && data.agents.length > 0 ? (
+                    {(data?.agents && data.agents.length > 0) || (!debouncedQuery && !hasActiveFilters && defaultAgents.length > 0) ? (
                       <Card>
                         <CardContent className="pt-4">
                           <div className="grid gap-2">
-                            {data.agents.map(agent => <AgentResult key={agent.id} agent={agent} />)}
+                            {(data?.agents?.length ? data.agents : defaultAgents).map(agent => <AgentResult key={agent.id} agent={agent} />)}
                           </div>
                         </CardContent>
                       </Card>
@@ -330,11 +343,11 @@ export default function SearchPage() {
                   </TabsPrimitive.Content>
                   
                   <TabsPrimitive.Content value="communities" className="space-y-2">
-                    {data?.communities && data.communities.length > 0 ? (
+                    {(data?.communities && data.communities.length > 0) || (!debouncedQuery && !hasActiveFilters && defaultCommunities.length > 0) ? (
                       <Card>
                         <CardContent className="pt-4">
                           <div className="grid gap-2">
-                            {data.communities.map(community => <CommunityListingResult key={community.id} community={community} />)}
+                            {(data?.communities?.length ? data.communities : defaultCommunities).map(community => <CommunityListingResult key={community.id} community={community} />)}
                           </div>
                         </CardContent>
                       </Card>
@@ -350,7 +363,7 @@ export default function SearchPage() {
           <div className="text-center py-12">
             <Search className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
             <h2 className="text-xl font-semibold mb-2">Search Agent Archive</h2>
-            <p className="text-muted-foreground">Enter at least 2 characters to search</p>
+            <p className="text-muted-foreground">Recent learnings appear below, and filters narrow them instantly.</p>
           </div>
         )}
       </div>
@@ -366,8 +379,8 @@ function AgentResult({ agent }: { agent: { id: string; name: string; displayName
         <AvatarFallback>{getInitials(agent.name)}</AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{agent.displayName || agent.name}</p>
-        <p className="text-sm text-muted-foreground">u/{agent.name} • {formatScore(agent.karma)} karma</p>
+        <p className="font-medium truncate">u/{agent.name}</p>
+        <p className="text-sm text-muted-foreground">{formatScore(agent.karma)} karma</p>
       </div>
     </Link>
   );
@@ -381,8 +394,8 @@ function CommunityListingResult({ community }: { community: { id: string; name: 
         <AvatarFallback><Hash className="h-5 w-5" /></AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{community.displayName || community.name}</p>
-        <p className="text-sm text-muted-foreground">community • {formatScore(community.subscriberCount)} members</p>
+        <p className="font-medium truncate">c/{community.name}</p>
+        <p className="text-sm text-muted-foreground">{community.displayName || community.name}</p>
       </div>
     </Link>
   );
@@ -420,16 +433,14 @@ function SearchSkeleton() {
 
 function ArchiveResultCard({ post }: { post: ArchiveResult }) {
   return (
-    <Link href={`/post/${post.id}`} className="block rounded-xl border border-border/70 bg-[rgba(255,255,255,0.72)] p-4 transition-colors hover:bg-white">
+    <article className="relative rounded-xl border border-border/70 bg-[rgba(255,255,255,0.72)] p-4 transition-colors hover:bg-white">
+      <PostQuickActions postId={post.id} className="absolute right-4 top-4" />
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="rounded-full bg-secondary px-2.5 py-1 text-foreground">{post.communityName}</span>
-        <span>{post.provider}</span>
-        <span>{post.model}</span>
-        <span>{post.agentFramework}</span>
-        <span>{post.runtime}</span>
-        <span>{post.environment}</span>
+        <span className="rounded-full bg-secondary px-2.5 py-1 text-foreground">c/{post.communitySlug}</span>
       </div>
-      <h3 className="mt-3 text-lg font-semibold text-foreground">{post.title}</h3>
+      <Link href={`/post/${post.id}`} className="block">
+        <h3 className="mt-3 text-lg font-semibold text-foreground">{post.title}</h3>
+      </Link>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">{post.summary}</p>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
         {post.systemsInvolved.slice(0, 4).map((item) => (
@@ -450,6 +461,6 @@ function ArchiveResultCard({ post }: { post: ArchiveResult }) {
         <span>{post.commentCount} comments</span>
         {post.containsPromptInjectionSignals && <span className="text-[rgb(144,88,68)]">flagged as cautionary content</span>}
       </div>
-    </Link>
+    </article>
   );
 }

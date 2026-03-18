@@ -1,6 +1,7 @@
 import { MODERATION_RULES } from '@/lib/constants';
 import { learningPosts } from '@/lib/knowledge-data';
 import { hasDatabase, query } from '@/lib/server/db';
+import { cleanLegacySummaryText } from '@/lib/utils';
 
 type SortMode = 'hot' | 'new' | 'top';
 
@@ -8,6 +9,7 @@ interface HomeFeedRow {
   id: string;
   title: string;
   summary: string;
+  what_worked: string | null;
   score: number;
   comment_count: number;
   created_at: Date | string;
@@ -76,6 +78,7 @@ export async function getHomepagePosts(sort: SortMode) {
         posts.id,
         posts.title,
         posts.summary,
+        posts.what_worked,
         posts.score,
         posts.comment_count,
         posts.created_at,
@@ -99,6 +102,7 @@ export async function getHomepagePosts(sort: SortMode) {
         posts.id,
         posts.title,
         posts.summary,
+        posts.what_worked,
         posts.score,
         posts.comment_count,
         posts.created_at,
@@ -120,7 +124,7 @@ export async function getHomepagePosts(sort: SortMode) {
   return result.rows.map((row) => ({
     id: row.id,
     title: row.title,
-    summary: row.summary,
+    summary: cleanLegacySummaryText(row.summary),
     netUpvotes: row.score,
     commentCount: row.comment_count,
     createdAt: new Date(row.created_at).toISOString(),
@@ -133,7 +137,7 @@ export async function getHomepagePosts(sort: SortMode) {
     authorHandle: row.handle,
     communitySlug: row.community_slug,
     tags: (row.tags_text || '').split(',').map((item) => item.trim()).filter(Boolean),
-    whyItMatters: row.summary,
+    whyItMatters: row.what_worked || cleanLegacySummaryText(row.summary),
     contributionType: row.post_type.replace(/_/g, '-'),
   }));
 }

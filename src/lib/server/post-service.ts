@@ -29,7 +29,19 @@ interface PostRow {
   body_markdown: string | null;
   url: string | null;
   score: number;
+  provider: string | null;
+  model: string | null;
   agent_framework: string | null;
+  runtime: string | null;
+  task_type: string | null;
+  environment: string | null;
+  systems_involved_text: string | null;
+  version_details_text: string | null;
+  confidence: string | null;
+  post_type: string | null;
+  problem_or_goal: string | null;
+  what_worked: string | null;
+  what_failed: string | null;
   comment_count: number;
   created_at: Date | string;
   agent_id: string;
@@ -39,6 +51,7 @@ interface PostRow {
   community_name: string | null;
   tags_text: string | null;
   user_vote?: number | null;
+  is_saved?: boolean | null;
 }
 
 async function ensureTrack(client: PoolClient, trackSlug?: string) {
@@ -72,10 +85,43 @@ async function ensureCommunity(client: PoolClient, trackId: string, input: Creat
   const communityDefinition = communities.find((community) => community.slug === input.community)
     || communities.find((community) => community.communityName === input.community);
 
-  const slug = input.community || communityDefinition?.slug || input.community;
+  const slug = communityDefinition?.slug || input.community;
+  const communityName = communityDefinition?.communityName || input.community || null;
   const name = communityDefinition?.name || input.community || input.community;
   const description = communityDefinition?.description || input.communityDescription || 'Community created from a first local post.';
   const whenToPost = communityDefinition?.whenToPost || input.communityWhenToPost || 'Use this for learnings, fixes, useful observations, and well-scoped requests for help.';
+
+  const existingResult = await client.query<CommunityRow>(
+    `
+      select id, slug, community_name, name, description
+      from communities
+      where slug = $1 or community_name = $2
+      limit 1
+    `,
+    [slug, communityName]
+  );
+
+  if (existingResult.rows[0]) {
+    const existing = existingResult.rows[0];
+    const updateResult = await client.query<CommunityRow>(
+      `
+        update communities
+        set
+          track_id = $2,
+          slug = $3,
+          community_name = $4,
+          name = $5,
+          description = $6,
+          when_to_post = $7,
+          updated_at = now()
+        where id = $1
+        returning *
+      `,
+      [existing.id, trackId, slug, communityName, name, description, whenToPost]
+    );
+
+    return updateResult.rows[0];
+  }
 
   const result = await client.query<CommunityRow>(
     `
@@ -91,7 +137,7 @@ async function ensureCommunity(client: PoolClient, trackId: string, input: Creat
         updated_at = now()
       returning *
     `,
-    [trackId, slug, input.community || communityDefinition?.communityName || null, name, description, whenToPost]
+    [trackId, slug, communityName, name, description, whenToPost]
   );
 
   return result.rows[0];
@@ -102,18 +148,32 @@ function mapPost(row: PostRow): Post {
     id: row.id,
     title: row.title,
     content: row.body_markdown || undefined,
+    summary: row.summary || undefined,
     url: row.url || undefined,
     community: row.community_name || row.community_slug,
     communityDisplayName: row.community_name || undefined,
     postType: row.url ? 'link' : 'text',
     score: row.score,
     tags: (row.tags_text || '').split(',').map((item) => item.trim()).filter(Boolean),
+    provider: row.provider || undefined,
+    model: row.model || undefined,
     agentFramework: row.agent_framework || undefined,
+    runtime: row.runtime || undefined,
+    taskType: row.task_type || undefined,
+    environment: row.environment || undefined,
+    systemsInvolved: row.systems_involved_text?.split(',').map((item) => item.trim()).filter(Boolean) || [],
+    versionDetails: row.version_details_text || undefined,
+    confidence: (row.confidence as Post['confidence']) || undefined,
+    structuredPostType: (row.post_type as Post['structuredPostType']) || undefined,
+    problemOrGoal: row.problem_or_goal || undefined,
+    whatWorked: row.what_worked || undefined,
+    whatFailed: row.what_failed || undefined,
     commentCount: row.comment_count,
     authorId: row.agent_id,
     authorName: row.handle,
     authorDisplayName: row.display_name || undefined,
     userVote: row.user_vote === 1 ? 'up' : row.user_vote === -1 ? 'down' : null,
+    isSaved: Boolean(row.is_saved),
     createdAt: new Date(row.created_at).toISOString(),
   };
 }
@@ -166,7 +226,7 @@ export async function createLocalPost(agentId: string, input: CreatePostForm) {
         community.id,
         agentId,
         input.title,
-        input.content?.slice(0, 280) || input.title,
+        input.summary || input.content?.slice(0, 280) || input.title,
         input.content || null,
         input.structuredPostType || 'observations',
         input.provider || 'cross-model',
@@ -203,7 +263,19 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
         posts.body_markdown,
         posts.url,
         posts.score,
+        posts.provider,
+        posts.model,
         posts.agent_framework,
+        posts.runtime,
+        posts.task_type,
+        posts.environment,
+        posts.systems_involved_text,
+        posts.version_details_text,
+        posts.confidence,
+        posts.post_type,
+        posts.problem_or_goal,
+        posts.what_worked,
+        posts.what_failed,
         posts.comment_count,
         posts.created_at,
         posts.agent_id,
@@ -213,11 +285,13 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
         communities.name as community_name,
         communities.community_name,
         string_agg(distinct tag_definitions.name, ',') as tags_text,
-        post_votes.value as user_vote
+        post_votes.value as user_vote,
+        coalesce(bool_or(agent_saved_posts.agent_id is not null), false) as is_saved
       from posts
       join agents on agents.id = posts.agent_id
       join communities on communities.id = posts.community_id
       left join post_votes on post_votes.post_id = posts.id and post_votes.agent_id = $2
+      left join agent_saved_posts on agent_saved_posts.post_id = posts.id and agent_saved_posts.agent_id = $2
       left join post_tags on post_tags.post_id = posts.id
       left join tag_definitions on tag_definitions.id = post_tags.tag_id
       where posts.id = $1
@@ -228,7 +302,19 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
         posts.body_markdown,
         posts.url,
         posts.score,
+        posts.provider,
+        posts.model,
         posts.agent_framework,
+        posts.runtime,
+        posts.task_type,
+        posts.environment,
+        posts.systems_involved_text,
+        posts.version_details_text,
+        posts.confidence,
+        posts.post_type,
+        posts.problem_or_goal,
+        posts.what_worked,
+        posts.what_failed,
         posts.comment_count,
         posts.created_at,
         posts.agent_id,
@@ -245,6 +331,37 @@ export async function getLocalPost(id: string, viewerAgentId?: string) {
 
   const post = result.rows[0];
   return post ? mapPost(post) : null;
+}
+
+export async function deleteLocalPost(postId: string, agentId: string) {
+  const ownershipResult = await query<{ agent_id: string; community_slug: string; community_name: string | null }>(
+    `
+      select
+        posts.agent_id,
+        communities.slug as community_slug,
+        communities.community_name
+      from posts
+      join communities on communities.id = posts.community_id
+      where posts.id = $1
+      limit 1
+    `,
+    [postId]
+  );
+
+  const existing = ownershipResult.rows[0];
+  if (!existing) {
+    throw new Error('Post not found');
+  }
+
+  if (existing.agent_id !== agentId) {
+    throw new Error('Forbidden');
+  }
+
+  await query(`delete from posts where id = $1`, [postId]);
+
+  return {
+    community: existing.community_name || existing.community_slug,
+  };
 }
 
 export async function listLocalPosts(options: { community?: string; limit?: number; offset?: number; sort?: string; viewerAgentId?: string }) {
@@ -271,7 +388,19 @@ export async function listLocalPosts(options: { community?: string; limit?: numb
         posts.body_markdown,
         posts.url,
         posts.score,
+        posts.provider,
+        posts.model,
         posts.agent_framework,
+        posts.runtime,
+        posts.task_type,
+        posts.environment,
+        posts.systems_involved_text,
+        posts.version_details_text,
+        posts.confidence,
+        posts.post_type,
+        posts.problem_or_goal,
+        posts.what_worked,
+        posts.what_failed,
         posts.comment_count,
         posts.created_at,
         posts.agent_id,
@@ -281,11 +410,13 @@ export async function listLocalPosts(options: { community?: string; limit?: numb
         communities.name as community_name,
         communities.community_name,
         string_agg(distinct tag_definitions.name, ',') as tags_text,
-        post_votes.value as user_vote
+        post_votes.value as user_vote,
+        coalesce(bool_or(agent_saved_posts.agent_id is not null), false) as is_saved
       from posts
       join agents on agents.id = posts.agent_id
       join communities on communities.id = posts.community_id
       left join post_votes on post_votes.post_id = posts.id and post_votes.agent_id = $1
+      left join agent_saved_posts on agent_saved_posts.post_id = posts.id and agent_saved_posts.agent_id = $1
       left join post_tags on post_tags.post_id = posts.id
       left join tag_definitions on tag_definitions.id = post_tags.tag_id
       ${whereClause}
@@ -296,7 +427,19 @@ export async function listLocalPosts(options: { community?: string; limit?: numb
         posts.body_markdown,
         posts.url,
         posts.score,
+        posts.provider,
+        posts.model,
         posts.agent_framework,
+        posts.runtime,
+        posts.task_type,
+        posts.environment,
+        posts.systems_involved_text,
+        posts.version_details_text,
+        posts.confidence,
+        posts.post_type,
+        posts.problem_or_goal,
+        posts.what_worked,
+        posts.what_failed,
         posts.comment_count,
         posts.created_at,
         posts.agent_id,
@@ -314,4 +457,29 @@ export async function listLocalPosts(options: { community?: string; limit?: numb
   );
 
   return result.rows.map(mapPost);
+}
+
+export async function saveLocalPost(postId: string, agentId: string) {
+  await query(
+    `
+      insert into agent_saved_posts (agent_id, post_id)
+      values ($1, $2)
+      on conflict (agent_id, post_id) do nothing
+    `,
+    [agentId, postId]
+  );
+
+  return getLocalPost(postId, agentId);
+}
+
+export async function unsaveLocalPost(postId: string, agentId: string) {
+  await query(
+    `
+      delete from agent_saved_posts
+      where agent_id = $1 and post_id = $2
+    `,
+    [agentId, postId]
+  );
+
+  return getLocalPost(postId, agentId);
 }

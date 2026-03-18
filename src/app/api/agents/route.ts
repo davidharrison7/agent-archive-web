@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedAgent } from '@/lib/server/auth';
-import { getAgentProfile, registerAgent, updateAuthenticatedAgent } from '@/lib/server/auth-service';
+import { deactivateAuthenticatedAgent, getAgentProfile, registerAgent, updateAuthenticatedAgent } from '@/lib/server/auth-service';
 import { hasDatabase } from '@/lib/server/db';
 import { enforceRateLimit, requireAuthenticatedAgent } from '@/lib/server/request-guards';
 import { getSeededAgentProfile } from '@/lib/server/seeded-archive';
@@ -26,8 +26,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         agent: {
           api_key: result.apiKey,
-          claim_url: `${new URL(request.url).origin}/settings`,
-          verification_code: result.agent.id.slice(0, 8),
         },
         profile: result.agent,
         important: 'Save this API key now. It is only shown once.',
@@ -108,6 +106,16 @@ export async function PATCH(request: NextRequest) {
       const updatedAgent = await updateAuthenticatedAgent(auth.agent.id, {
         displayName: body.displayName,
         description: body.description,
+        provider: body.provider,
+        defaultModel: body.defaultModel,
+        agentFramework: body.agentFramework,
+        runtime: body.runtime,
+        taskType: body.taskType,
+        environment: body.environment,
+        systemsInvolved: body.systemsInvolved,
+        versionDetails: body.versionDetails,
+        confidence: body.confidence,
+        structuredPostType: body.structuredPostType,
       });
 
       return NextResponse.json({ agent: updatedAgent });
@@ -129,6 +137,46 @@ export async function PATCH(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    if (hasDatabase()) {
+      const auth = await requireAuthenticatedAgent(request);
+      if (auth.response) {
+        return auth.response;
+      }
+
+      await deactivateAuthenticatedAgent(auth.agent.id);
+      return NextResponse.json({ success: true });
+    }
+
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const response = await fetch(`${API_BASE}/agents/me`, {
+      method: 'DELETE',
+      headers: { Authorization: authHeader },
+    });
+
+    if (response.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    if (message === 'Agent not found') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (message === 'Remove your posts and comments before closing your account.') {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 // Agent Archive API Client
 
-import type { Agent, Post, Comment, CommunityListing, SearchResults, PaginatedResponse, CreatePostForm, CreateCommentForm, RegisterAgentForm, PostSort, CommentSort, TimeRange } from '@/types';
+import type { Agent, Post, Comment, CommunityListing, SearchResults, PaginatedResponse, CreatePostForm, CreateCommentForm, RegisterAgentForm, UpdateAgentForm, PostSort, CommentSort, TimeRange } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -65,23 +65,23 @@ class ApiClient {
 
   // Agent endpoints
   async register(data: RegisterAgentForm) {
-    return this.request<{ agent: { api_key: string; claim_url: string; verification_code: string }; important: string }>('POST', '/agents', data);
+    return this.request<{ agent: { api_key: string }; important: string }>('POST', '/agents', data);
   }
 
   async getMe() {
     return this.request<{ agent: Agent }>('GET', '/agents').then(r => r.agent);
   }
 
-  async updateMe(data: { displayName?: string; description?: string }) {
+  async updateMe(data: UpdateAgentForm) {
     return this.request<{ agent: Agent }>('PATCH', '/agents', data).then(r => r.agent);
   }
 
-  async claimAgent(verificationCode: string) {
-    return this.request<{ agent: Agent }>('POST', '/agents/claim', { verificationCode }).then(r => r.agent);
+  async closeAccount() {
+    return this.request<{ success: boolean }>('DELETE', '/agents');
   }
 
   async getAgent(name: string) {
-    return this.request<{ agent: Agent; isFollowing: boolean; recentPosts: Post[]; recentComments: Comment[] }>('GET', '/agents', undefined, { name });
+    return this.request<{ agent: Agent; isFollowing: boolean; recentPosts: Post[]; recentComments: Comment[]; savedPosts?: Post[] }>('GET', '/agents', undefined, { name });
   }
 
   async followAgent(name: string) {
@@ -113,6 +113,14 @@ class ApiClient {
 
   async deletePost(id: string) {
     return this.request<{ success: boolean }>('DELETE', `/posts/${id}`);
+  }
+
+  async savePost(id: string) {
+    return this.request<{ success: boolean; post?: Post }>('POST', `/posts/${id}/save`);
+  }
+
+  async unsavePost(id: string) {
+    return this.request<{ success: boolean; post?: Post }>('DELETE', `/posts/${id}/save`);
   }
 
   async upvotePost(id: string) {
