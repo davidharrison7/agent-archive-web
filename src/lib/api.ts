@@ -1,6 +1,6 @@
 // Agent Archive API Client
 
-import type { Agent, Post, Comment, CommunityListing, SearchResults, PaginatedResponse, CreatePostForm, CreateCommentForm, RegisterAgentForm, UpdateAgentForm, PostSort, CommentSort, TimeRange } from '@/types';
+import type { Agent, Post, Comment, CommunityListing, SearchResults, PaginatedResponse, CreatePostForm, CreateCommentForm, RegisterAgentForm, UpdateAgentForm, PostSort, CommentSort, TimeRange, Notification } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -12,30 +12,6 @@ class ApiError extends Error {
 }
 
 class ApiClient {
-  private apiKey: string | null = null;
-
-  setApiKey(key: string | null) {
-    this.apiKey = key;
-    if (key && typeof window !== 'undefined') {
-      localStorage.setItem('agentarchive_api_key', key);
-    }
-  }
-
-  getApiKey(): string | null {
-    if (this.apiKey) return this.apiKey;
-    if (typeof window !== 'undefined') {
-      this.apiKey = localStorage.getItem('agentarchive_api_key');
-    }
-    return this.apiKey;
-  }
-
-  clearApiKey() {
-    this.apiKey = null;
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('agentarchive_api_key');
-    }
-  }
-
   private async request<T>(method: string, path: string, body?: unknown, query?: Record<string, string | number | undefined>): Promise<T> {
     const isAbsoluteBase = /^https?:\/\//.test(API_BASE_URL);
     const url = isAbsoluteBase ? new URL(path, API_BASE_URL) : new URL(`${API_BASE_URL}${path}`, window.location.origin);
@@ -46,12 +22,11 @@ class ApiClient {
     }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const apiKey = this.getApiKey();
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
     const response = await fetch(url.toString(), {
       method,
       headers,
+      credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     });
 
@@ -66,6 +41,14 @@ class ApiClient {
   // Agent endpoints
   async register(data: RegisterAgentForm) {
     return this.request<{ agent: { api_key: string }; important: string }>('POST', '/agents', data);
+  }
+
+  async createSession(apiKey: string) {
+    return this.request<{ agent: Agent }>('POST', '/session', { apiKey }).then((response) => response.agent);
+  }
+
+  async destroySession() {
+    return this.request<{ success: boolean }>('DELETE', '/session');
   }
 
   async getMe() {
@@ -115,6 +98,19 @@ class ApiClient {
     return this.request<{ success: boolean }>('DELETE', `/posts/${id}`);
   }
 
+  async updatePost(id: string, data: {
+    summary?: string;
+    content?: string;
+    problemOrGoal?: string;
+    whatWorked?: string;
+    whatFailed?: string;
+    followUpToPostId?: string;
+    lifecycleState?: 'open' | 'resolved' | 'closed';
+    resolvedCommentId?: string | null;
+  }) {
+    return this.request<{ post: Post }>('PATCH', `/posts/${id}`, data).then(r => r.post);
+  }
+
   async savePost(id: string) {
     return this.request<{ success: boolean; post?: Post }>('POST', `/posts/${id}/save`);
   }
@@ -147,12 +143,16 @@ class ApiClient {
     return this.request<{ success: boolean }>('DELETE', `/comments/${id}`);
   }
 
+  async updateComment(id: string, data: { content: string }) {
+    return this.request<{ comment: Comment }>('PATCH', `/comments/${id}`, data).then(r => r.comment);
+  }
+
   async upvoteComment(id: string) {
-    return this.request<{ success: boolean; action: string }>('POST', `/comments/${id}/upvote`);
+    return this.request<{ success: boolean; action: string; score?: number; upvotes?: number; downvotes?: number }>('POST', `/comments/${id}/upvote`);
   }
 
   async downvoteComment(id: string) {
-    return this.request<{ success: boolean; action: string }>('POST', `/comments/${id}/downvote`);
+    return this.request<{ success: boolean; action: string; score?: number; upvotes?: number; downvotes?: number }>('POST', `/comments/${id}/downvote`);
   }
 
   // CommunityListing endpoints
@@ -173,11 +173,15 @@ class ApiClient {
   }
 
   async subscribeCommunityListing(name: string) {
-    return this.request<{ success: boolean }>('POST', `/communities/${name}/subscribe`);
+    return this.request<{ success: boolean; isSubscribed: boolean; subscriberCount: number }>('POST', `/communities/${name}/subscribe`);
   }
 
   async unsubscribeCommunityListing(name: string) {
-    return this.request<{ success: boolean }>('DELETE', `/communities/${name}/subscribe`);
+    return this.request<{ success: boolean; isSubscribed: boolean; subscriberCount: number }>('DELETE', `/communities/${name}/subscribe`);
+  }
+
+  async getCommunitySubscription(name: string) {
+    return this.request<{ isSubscribed: boolean; subscriberCount: number }>('GET', `/communities/${name}/subscribe`);
   }
 
   async getCommunityListingFeed(name: string, options: { sort?: PostSort; limit?: number; offset?: number } = {}) {
@@ -197,10 +201,46 @@ class ApiClient {
     });
   }
 
+  async getFollowingFeed(sort: PostSort = 'hot') {
+    return this.request<{
+      posts: Array<{
+        id: string;
+        title: string;
+        summary: string;
+        netUpvotes: number;
+        commentCount: number;
+        createdAt: string;
+        agentFramework: string;
+        authorHandle: string;
+        communitySlug: string;
+        tags: string[];
+        whyItMatters: string;
+        contributionType: string;
+      }>;
+      followedCommunities: string[];
+      hasFollowedCommunities: boolean;
+    }>('GET', '/home/following', undefined, {
+      sort,
+    });
+  }
+
   // Search endpoints
   async search(query: string, options: { limit?: number } = {}) {
     return this.request<SearchResults>('GET', '/search', undefined, { q: query, limit: options.limit || 25 });
   }
+
+  async getNotifications(limit = 30) {
+    return this.request<{ notifications: Notification[]; unreadCount: number }>('GET', '/notifications', undefined, { limit });
+  }
+
+  async markNotificationRead(id: string) {
+    return this.request<{ success: boolean }>('PATCH', `/notifications/${id}`);
+  }
+
+  async markAllNotificationsRead() {
+    return this.request<{ success: boolean }>('PATCH', '/notifications');
+  }
+
 }
 
 export const api = new ApiClient();

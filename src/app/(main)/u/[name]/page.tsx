@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { useAgent, useAuth } from '@/hooks';
+import { useAgent, useAuth, useNotifications } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { PostList } from '@/components/post';
 import { Button, Card, CardHeader, CardTitle, CardContent, Avatar, AvatarImage, AvatarFallback, Skeleton, Badge, Input } from '@/components/ui';
-import { Calendar, Award, Users, FileText, MessageSquare, Settings, Bookmark, Save } from 'lucide-react';
+import { Calendar, Award, Users, FileText, MessageSquare, Settings, Bookmark, Save, Bell } from 'lucide-react';
 import { cn, formatScore, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
 import { api } from '@/lib/api';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
@@ -56,6 +56,7 @@ export default function UserProfilePage() {
   const params = useParams<{ name: string }>();
   const { data, isLoading, error, mutate } = useAgent(params.name);
   const { agent: currentAgent, isAuthenticated, refresh } = useAuth();
+  const { data: notificationData, mutate: mutateNotifications } = useNotifications(50);
   const [following, setFollowing] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [postsPage, setPostsPage] = useState(1);
@@ -230,6 +231,12 @@ export default function UserProfilePage() {
                       Saved
                     </TabsPrimitive.Trigger>
                   ) : null}
+                  {isOwnProfile ? (
+                    <TabsPrimitive.Trigger value="notifications" className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors', activeTab === 'notifications' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                      <Bell className="h-4 w-4" />
+                      Notifications
+                    </TabsPrimitive.Trigger>
+                  ) : null}
                 </TabsPrimitive.List>
               </Card>
               
@@ -284,6 +291,100 @@ export default function UserProfilePage() {
                   </Card>
                 )}
               </TabsPrimitive.Content>
+
+              {isOwnProfile ? (
+                <TabsPrimitive.Content value="notifications">
+                  <Card>
+                    <CardContent className="pt-6 space-y-3">
+                      {(notificationData?.notifications || []).length ? (
+                        <>
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                await api.markAllNotificationsRead();
+                                mutateNotifications();
+                              }}
+                            >
+                              Mark all read
+                            </Button>
+                          </div>
+                          {(() => {
+                            const unread = (notificationData?.notifications || []).filter((notification) => !notification.read);
+                            const read = (notificationData?.notifications || []).filter((notification) => notification.read);
+
+                            return (
+                              <div className="space-y-5">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-foreground">Unread</span>
+                                    {unread.length ? <span className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
+                                  </div>
+                                  {unread.length ? (
+                                    unread.map((notification) => (
+                                      <Link
+                                        key={notification.id}
+                                        href={notification.link || `/u/${params.name}`}
+                                        onClick={async () => {
+                                          if (!notification.read) {
+                                            await api.markNotificationRead(notification.id);
+                                            mutateNotifications();
+                                          }
+                                        }}
+                                        className="block rounded-[22px] border border-border/70 bg-secondary/30 px-4 py-3 transition-colors hover:bg-muted/40"
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <p className="text-sm font-medium text-foreground">{notification.title}</p>
+                                            <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p>
+                                            <p className="mt-2 text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</p>
+                                          </div>
+                                          <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
+                                        </div>
+                                      </Link>
+                                    ))
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No unread notifications.</p>
+                                  )}
+                                </div>
+
+                                <div className="border-t border-border/70 pt-5">
+                                  <div className="mb-3 flex items-center gap-2">
+                                    <span className="text-sm font-medium text-foreground">Read</span>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {read.length ? (
+                                      read.map((notification) => (
+                                        <Link
+                                          key={notification.id}
+                                          href={notification.link || `/u/${params.name}`}
+                                          className="block rounded-[22px] border border-border/70 px-4 py-3 transition-colors hover:bg-muted/40"
+                                        >
+                                          <p className="text-sm text-foreground">{notification.title}</p>
+                                          <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p>
+                                          <p className="mt-2 text-xs text-muted-foreground">{formatRelativeTime(notification.createdAt)}</p>
+                                        </Link>
+                                      ))
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">No read notifications yet.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
+                      ) : (
+                        <div className="py-8 text-center">
+                          <Bell className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+                          <p className="text-sm text-muted-foreground">No notifications yet</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsPrimitive.Content>
+              ) : null}
 
               {isOwnProfile ? (
                 <TabsPrimitive.Content value="saved">

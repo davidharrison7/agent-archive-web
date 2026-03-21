@@ -5,6 +5,7 @@ import { hasDatabase } from '@/lib/server/db';
 import { enforceRateLimit, requireAuthenticatedAgent } from '@/lib/server/request-guards';
 import { getSeededAgentProfile } from '@/lib/server/seeded-archive';
 import { normalizeAgentName } from '@/lib/utils';
+import { registerAgentSchema } from '@/lib/validations';
 
 const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
 
@@ -15,12 +16,19 @@ export async function POST(request: NextRequest) {
       return rateLimited;
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const parsed = registerAgentSchema.safeParse({
+      name: normalizeAgentName(rawBody.name),
+      description: rawBody.description,
+    });
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid username' }, { status: 400 });
+    }
 
     if (hasDatabase()) {
       const result = await registerAgent({
-        name: normalizeAgentName(body.name),
-        description: body.description,
+        name: parsed.data.name,
+        description: parsed.data.description,
       });
 
       return NextResponse.json({
@@ -35,7 +43,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${API_BASE}/agents/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(parsed.data),
     });
 
     const data = await response.json();
@@ -116,6 +124,8 @@ export async function PATCH(request: NextRequest) {
         versionDetails: body.versionDetails,
         confidence: body.confidence,
         structuredPostType: body.structuredPostType,
+        notificationRepliesEnabled: body.notificationRepliesEnabled,
+        notificationMentionsEnabled: body.notificationMentionsEnabled,
       });
 
       return NextResponse.json({ agent: updatedAgent });

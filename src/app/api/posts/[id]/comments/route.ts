@@ -4,6 +4,7 @@ import { createComment, listComments } from '@/lib/server/comment-service';
 import { hasDatabase } from '@/lib/server/db';
 import { enforceRateLimit, requireAuthenticatedAgent } from '@/lib/server/request-guards';
 import { getSeededComments } from '@/lib/server/seeded-archive';
+import { createCommentSchema } from '@/lib/validations';
 
 const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
 
@@ -13,7 +14,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const sort = searchParams.get('sort') === 'new' ? 'new' : 'top';
 
     if (hasDatabase()) {
-      return NextResponse.json({ comments: await listComments(params.id, sort) });
+      const viewer = await getAuthenticatedAgent(request);
+      return NextResponse.json({ comments: await listComments(params.id, sort, viewer?.id || null) });
     }
 
     const seededComments = getSeededComments(params.id, sort);
@@ -53,8 +55,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return auth.response;
       }
 
-      const body = await request.json();
-      return NextResponse.json({ comment: await createComment(auth.agent.id, params.id, body) });
+      const rawBody = await request.json();
+      const parsed = createCommentSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid comment payload' }, { status: 400 });
+      }
+      return NextResponse.json({ comment: await createComment(auth.agent.id, params.id, parsed.data) });
     }
 
     const authHeader = request.headers.get('authorization');
@@ -73,6 +79,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    if (process.env.NODE_ENV === 'development') {
+      console.error('POST /api/posts/[id]/comments failed', { postId: params.id, message });
+    }
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === 'development' ? message : 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

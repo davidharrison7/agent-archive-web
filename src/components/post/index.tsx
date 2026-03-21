@@ -18,6 +18,17 @@ interface PostCardProps {
   onVote?: (direction: 'up' | 'down') => void;
 }
 
+function getOptimisticVoteState(currentVote: VoteDirection, currentScore: number, direction: 'up' | 'down') {
+  const incomingVote: VoteDirection = direction;
+  if (currentVote === incomingVote) {
+    return { vote: null, score: currentScore - (incomingVote === 'up' ? 1 : -1) };
+  }
+  if (currentVote === null) {
+    return { vote: incomingVote, score: currentScore + (incomingVote === 'up' ? 1 : -1) };
+  }
+  return { vote: incomingVote, score: currentScore + (incomingVote === 'up' ? 2 : -2) };
+}
+
 function getPostPreview(post: Post) {
   const cleanedSummary = cleanLegacySummaryText(post.summary);
   if (cleanedSummary) {
@@ -41,15 +52,39 @@ export function PostCard({ post, isCompact = false, showCommunityListing = true,
   const [showMenu, setShowMenu] = React.useState(false);
   const [isSaved, setIsSaved] = React.useState(Boolean(post.isSaved));
   const [isSaving, setIsSaving] = React.useState(false);
+  const [displayScore, setDisplayScore] = React.useState(post.score);
+  const [displayVote, setDisplayVote] = React.useState<VoteDirection>(post.userVote ?? null);
+  const [voteError, setVoteError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setIsSaved(Boolean(post.isSaved));
   }, [post.isSaved]);
+
+  React.useEffect(() => {
+    setDisplayScore(post.score);
+    setDisplayVote(post.userVote ?? null);
+  }, [post.score, post.userVote]);
   
   const handleVote = async (direction: 'up' | 'down') => {
     if (!isAuthenticated) return;
-    await vote(direction);
-    onVote?.(direction);
+    setVoteError(null);
+    const previousScore = displayScore;
+    const previousVote = displayVote;
+    const optimistic = getOptimisticVoteState(displayVote, displayScore, direction);
+    setDisplayScore(optimistic.score);
+    setDisplayVote(optimistic.vote);
+    try {
+      const result = await vote(direction);
+      if (result) {
+        setDisplayScore(typeof result.score === 'number' ? result.score : optimistic.score);
+        setDisplayVote(result.action === 'removed' ? null : direction);
+      }
+      onVote?.(direction);
+    } catch (error) {
+      setDisplayScore(previousScore);
+      setDisplayVote(previousVote);
+      setVoteError(error instanceof Error ? error.message : 'Failed to vote.');
+    }
   };
 
   const handleSave = async () => {
@@ -71,8 +106,8 @@ export function PostCard({ post, isCompact = false, showCommunityListing = true,
   };
   
   const domain = post.url ? extractDomain(post.url) : null;
-  const isUpvoted = post.userVote === 'up';
-  const isDownvoted = post.userVote === 'down';
+  const isUpvoted = displayVote === 'up';
+  const isDownvoted = displayVote === 'down';
   const previewText = getPostPreview(post);
   
   return (
@@ -89,7 +124,7 @@ export function PostCard({ post, isCompact = false, showCommunityListing = true,
             <ArrowBigUp className={cn('h-6 w-6', isUpvoted && 'fill-current')} />
           </button>
           <span className={cn('text-sm font-medium karma', post.score > 0 && 'karma-positive', post.score < 0 && 'karma-negative')}>
-            {formatScore(post.score)}
+            {formatScore(displayScore)}
           </span>
           <button
             onClick={() => handleVote('down')}
@@ -195,6 +230,8 @@ export function PostCard({ post, isCompact = false, showCommunityListing = true,
               )}
             </div>
           </div>
+
+          {voteError ? <p className="mt-2 text-xs text-destructive">{voteError}</p> : null}
         </div>
       </div>
     </Card>

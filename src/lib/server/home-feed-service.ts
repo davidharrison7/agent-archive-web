@@ -1,7 +1,7 @@
 import { MODERATION_RULES } from '@/lib/constants';
 import { learningPosts } from '@/lib/knowledge-data';
 import { hasDatabase, query } from '@/lib/server/db';
-import { cleanLegacySummaryText } from '@/lib/utils';
+import { cleanLegacySummaryText, cleanSupportingDetailText } from '@/lib/utils';
 
 type SortMode = 'hot' | 'new' | 'top';
 
@@ -9,6 +9,7 @@ interface HomeFeedRow {
   id: string;
   title: string;
   summary: string;
+  body_markdown: string | null;
   what_worked: string | null;
   score: number;
   comment_count: number;
@@ -43,8 +44,14 @@ function getSeededPosts(sort: SortMode) {
 }
 
 export async function getHomepagePosts(sort: SortMode) {
+  return getHomepagePostsForCommunities(sort);
+}
+
+export async function getHomepagePostsForCommunities(sort: SortMode, communitySlugs?: string[]) {
   if (!hasDatabase()) {
-    return getSeededPosts(sort).map((post) => ({
+    return getSeededPosts(sort)
+      .filter((post) => !communitySlugs?.length || communitySlugs.includes(post.communitySlug))
+      .map((post) => ({
       id: post.id,
       title: post.title,
       summary: post.summary,
@@ -72,12 +79,21 @@ export async function getHomepagePosts(sort: SortMode) {
         ? 'posts.score desc, posts.created_at desc'
         : '(posts.score * 0.7 + posts.comment_count * 1.5) desc, posts.created_at desc';
 
+  const values: unknown[] = [MODERATION_RULES.HIDE_POST_SCORE_THRESHOLD];
+  let whereClause = `where posts.score > $1`;
+
+  if (communitySlugs?.length) {
+    values.push(communitySlugs);
+    whereClause += ` and communities.slug = any($${values.length}::text[])`;
+  }
+
   const result = await query<HomeFeedRow>(
     `
       select
         posts.id,
         posts.title,
         posts.summary,
+        posts.body_markdown,
         posts.what_worked,
         posts.score,
         posts.comment_count,
@@ -97,11 +113,12 @@ export async function getHomepagePosts(sort: SortMode) {
       join communities on communities.id = posts.community_id
       left join post_tags on post_tags.post_id = posts.id
       left join tag_definitions on tag_definitions.id = post_tags.tag_id
-      where posts.score > $1
+      ${whereClause}
       group by
         posts.id,
         posts.title,
         posts.summary,
+        posts.body_markdown,
         posts.what_worked,
         posts.score,
         posts.comment_count,
@@ -118,7 +135,7 @@ export async function getHomepagePosts(sort: SortMode) {
       order by ${orderBy}
       limit 25
     `,
-    [MODERATION_RULES.HIDE_POST_SCORE_THRESHOLD]
+    values
   );
 
   return result.rows.map((row) => ({
@@ -137,7 +154,7 @@ export async function getHomepagePosts(sort: SortMode) {
     authorHandle: row.handle,
     communitySlug: row.community_slug,
     tags: (row.tags_text || '').split(',').map((item) => item.trim()).filter(Boolean),
-    whyItMatters: row.what_worked || cleanLegacySummaryText(row.summary),
+    whyItMatters: cleanSupportingDetailText(row.body_markdown || undefined, cleanLegacySummaryText(row.summary)),
     contributionType: row.post_type.replace(/_/g, '-'),
   }));
 }

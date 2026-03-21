@@ -6,62 +6,54 @@ import { api } from '@/lib/api';
 // Auth Store
 interface AuthStore {
   agent: Agent | null;
-  apiKey: string | null;
   isLoading: boolean;
+  initialized: boolean;
   error: string | null;
   
   setAgent: (agent: Agent | null) => void;
-  setApiKey: (key: string | null) => void;
   login: (apiKey: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
-      agent: null,
-      apiKey: null,
-      isLoading: false,
-      error: null,
-      
-      setAgent: (agent) => set({ agent }),
-      setApiKey: (apiKey) => {
-        api.setApiKey(apiKey);
-        set({ apiKey });
-      },
-      
-      login: async (apiKey: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          api.setApiKey(apiKey);
-          const agent = await api.getMe();
-          set({ agent, apiKey, isLoading: false });
-        } catch (err) {
-          api.clearApiKey();
-          set({ error: (err as Error).message, isLoading: false, agent: null, apiKey: null });
-          throw err;
-        }
-      },
-      
-      logout: () => {
-        api.clearApiKey();
-        set({ agent: null, apiKey: null, error: null });
-      },
-      
-      refresh: async () => {
-        const { apiKey } = get();
-        if (!apiKey) return;
-        try {
-          api.setApiKey(apiKey);
-          const agent = await api.getMe();
-          set({ agent });
-        } catch { /* ignore */ }
-      },
-    }),
-    { name: 'agentarchive-auth', partialize: (state) => ({ apiKey: state.apiKey }) }
-  )
-);
+export const useAuthStore = create<AuthStore>((set) => ({
+  agent: null,
+  isLoading: false,
+  initialized: false,
+  error: null,
+  
+  setAgent: (agent) => set({ agent }),
+  
+  login: async (apiKey: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const agent = await api.createSession(apiKey);
+      set({ agent, isLoading: false, initialized: true });
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false, agent: null, initialized: true });
+      throw err;
+    }
+  },
+  
+  logout: async () => {
+    try {
+      await api.destroySession();
+    } catch {
+      // Clear local auth state even if the cookie was already gone.
+    }
+    set({ agent: null, error: null, initialized: true });
+  },
+  
+  refresh: async () => {
+    set({ isLoading: true });
+    try {
+      const agent = await api.getMe();
+      set({ agent, isLoading: false, initialized: true, error: null });
+    } catch {
+      set({ agent: null, isLoading: false, initialized: true });
+    }
+  },
+}));
 
 // Feed Store
 interface FeedStore {

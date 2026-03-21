@@ -8,9 +8,12 @@ import { useUIStore } from '@/store';
 import { useAuth } from '@/hooks';
 import { api } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, Button, Input, Textarea, Card } from '@/components/ui';
-import { Check, Plus } from 'lucide-react';
 import { parseTagInput, slugifyCommunityName, toCommunityListingName } from '@/lib/utils';
 import { structuredCreatePostSchema, type StructuredCreatePostInput } from '@/lib/validations';
+import { LIMITS } from '@/lib/constants';
+import { SearchableCombobox } from '@/components/common/searchable-combobox';
+import { MentionTextarea } from '@/components/common/mention-textarea';
+import { EnumSelect } from '@/components/common/enum-select';
 import {
   communities,
   confidenceOptions,
@@ -24,17 +27,8 @@ import {
 import type { ArchiveFacets } from '@/lib/server/facets-service';
 import type { Agent } from '@/types';
 
-type ComboboxOption = {
-  value: string;
-  label?: string;
-  description?: string;
-};
-
-type SuggestionFacet = 'providers' | 'models' | 'agentFrameworks' | 'runtimes' | 'taskTypes' | 'environments' | 'communities';
-
 function normalizeStructuredPostTypeForStorage(value: StructuredCreatePostInput['structuredPostType']) {
   if (value === 'issue') return 'incident_report';
-  if (value === 'question') return 'observations';
   return value;
 }
 
@@ -60,141 +54,19 @@ function getDefaultCreateValues(agent?: Agent): StructuredCreatePostInput {
     whatWorked: '',
     whatFailed: '',
     confidence: 'likely',
-    structuredPostType: 'playbook',
+    structuredPostType: 'observations',
     content: '',
     url: '',
+    followUpToPostId: '',
     postType: 'text',
   };
 }
 
-function SearchableCombobox({
-  label,
-  value,
-  onChange,
-  placeholder,
-  suggestions,
-  error,
-  emptyCreateLabel,
-  suggestionFacet,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  suggestions: ComboboxOption[];
-  error?: string;
-  emptyCreateLabel?: string;
-  suggestionFacet?: SuggestionFacet;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [remoteSuggestions, setRemoteSuggestions] = React.useState<ComboboxOption[]>([]);
-  const normalizedValue = value.trim().toLowerCase();
-  const filteredSuggestions = React.useMemo(() => {
-    const source = remoteSuggestions.length ? remoteSuggestions : suggestions;
-    if (!normalizedValue) return source.slice(0, 8);
-    return source
-      .filter((suggestion) => `${suggestion.label || suggestion.value} ${suggestion.description || ''}`.toLowerCase().includes(normalizedValue))
-      .slice(0, 8);
-  }, [normalizedValue, remoteSuggestions, suggestions]);
-
-  React.useEffect(() => {
-    if (!suggestionFacet) return;
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => {
-      const params = new URLSearchParams({
-        facet: suggestionFacet,
-        q: value,
-        limit: '8',
-      });
-
-      fetch(`/api/facets?${params.toString()}`, { signal: controller.signal })
-        .then((response) => response.json())
-        .then((payload) => {
-          const mapped = (payload.suggestions || []).map((entry: string | { slug?: string; name?: string }) => {
-            if (typeof entry === 'string') return { value: entry };
-            return {
-              value: entry.slug || entry.name || '',
-              label: entry.name || entry.slug || '',
-            };
-          });
-          setRemoteSuggestions(mapped.filter((entry: ComboboxOption) => entry.value));
-        })
-        .catch(() => setRemoteSuggestions([]));
-    }, 180);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeoutId);
-    };
-  }, [suggestionFacet, value]);
-
-  const hasExactMatch = suggestions.some((suggestion) => {
-    const label = suggestion.label || suggestion.value;
-    return label.toLowerCase() === normalizedValue || suggestion.value.toLowerCase() === normalizedValue;
-  });
-
-  return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium">{label}</label>
-      <div className="relative">
-        <Input
-          value={value}
-          onChange={(event) => {
-            onChange(event.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-          placeholder={placeholder}
-        />
-        {open ? (
-          <div className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-2xl border border-border/70 bg-card p-2 shadow-[0_18px_42px_rgba(78,60,40,0.14)]">
-            {filteredSuggestions.map((suggestion) => {
-              const display = suggestion.label || suggestion.value;
-              const selected = display.toLowerCase() === normalizedValue || suggestion.value.toLowerCase() === normalizedValue;
-              return (
-                <button
-                  key={`${suggestion.value}-${display}`}
-                  type="button"
-                  className="flex w-full items-start justify-between rounded-xl px-3 py-2 text-left transition-colors hover:bg-secondary"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    onChange(display);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground">{display}</span>
-                    {suggestion.description ? (
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{suggestion.description}</span>
-                    ) : null}
-                  </span>
-                  {selected ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : null}
-                </button>
-              );
-            })}
-            {!hasExactMatch && normalizedValue ? (
-              <button
-                type="button"
-                className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  onChange(value.trim());
-                  setOpen(false);
-                }}
-              >
-                <Plus className="h-4 w-4 text-primary" />
-                {emptyCreateLabel || `Use "${value.trim()}"`}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-      <p className="text-xs text-muted-foreground">Suggestions appear as you type, but you can enter a new value if nothing fits.</p>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-    </div>
-  );
+function normalizeFollowUpReference(value?: string) {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const match = raw.match(/\/post\/([^/?#]+)/i);
+  return match?.[1] || raw;
 }
 
 export function CreatePostModal() {
@@ -219,6 +91,15 @@ export function CreatePostModal() {
   const taskTypeValue = watch('taskType');
   const environmentValue = watch('environment');
   const structuredPostTypeValue = watch('structuredPostType');
+  const communityDescriptionValue = watch('communityDescription') || '';
+  const communityWhenToPostValue = watch('communityWhenToPost') || '';
+  const titleValue = watch('title') || '';
+  const summaryValue = watch('summary') || '';
+  const versionDetailsValue = watch('versionDetails') || '';
+  const problemOrGoalValue = watch('problemOrGoal') || '';
+  const whatWorkedValue = watch('whatWorked') || '';
+  const whatFailedValue = watch('whatFailed') || '';
+  const contentValue = watch('content') || '';
   const isNewCommunity = watch('isNewCommunity');
   const filteredCommunities = React.useMemo(
     () => (facets?.communities?.length ? facets.communities : communities.map((community) => ({ slug: community.slug, name: community.name }))),
@@ -240,7 +121,15 @@ export function CreatePostModal() {
 
   React.useEffect(() => {
     if (createPostOpen) {
-      reset(getDefaultCreateValues(agent || undefined));
+      const nextValues = getDefaultCreateValues(agent || undefined);
+      if (typeof window !== 'undefined') {
+        const pendingFollowUp = window.sessionStorage.getItem('agentarchive_follow_up_to_post_id');
+        if (pendingFollowUp) {
+          nextValues.followUpToPostId = pendingFollowUp;
+          window.sessionStorage.removeItem('agentarchive_follow_up_to_post_id');
+        }
+      }
+      reset(nextValues);
       setCommunityInput('');
       setSubmitError('');
     }
@@ -305,6 +194,7 @@ export function CreatePostModal() {
         whatFailed: data.whatFailed,
         confidence: data.confidence,
         structuredPostType: storageStructuredType,
+        followUpToPostId: normalizeFollowUpReference(data.followUpToPostId),
         communityDescription: data.communityDescription,
         communityWhenToPost: data.communityWhenToPost,
       });
@@ -324,6 +214,8 @@ export function CreatePostModal() {
   };
 
   if (!createPostOpen) return null;
+
+  const fieldCounterClass = 'mt-1 text-right text-[11px] text-muted-foreground';
 
   return (
       <Dialog open={createPostOpen} onOpenChange={closeCreatePost}>
@@ -360,6 +252,7 @@ export function CreatePostModal() {
                 emptyCreateLabel={communityInput.trim() ? `Create new community "${communityInput.trim()}"` : undefined}
                 error={errors.community?.message}
                 suggestionFacet="communities"
+                helperText="Suggestions appear as you type, but you can enter a new value if nothing fits."
               />
               {selectedCommunityListing ? <p className="text-xs text-muted-foreground">Posts will be published to `c/{selectedCommunityListing}`.</p> : null}
             </div>
@@ -372,6 +265,7 @@ export function CreatePostModal() {
                     placeholder="Describe what this new community is for and what kinds of posts belong here"
                     rows={3}
                   />
+                  <p className={fieldCounterClass}>{communityDescriptionValue.length} / {LIMITS.COMMUNITY_DESCRIPTION_MAX} chars</p>
                   {errors.communityDescription ? <p className="mt-1 text-xs text-destructive">{errors.communityDescription.message}</p> : null}
                 </div>
                 <div>
@@ -380,6 +274,7 @@ export function CreatePostModal() {
                     placeholder="Explain when agents should post here and what good posts in this community should include"
                     rows={3}
                   />
+                  <p className={fieldCounterClass}>{communityWhenToPostValue.length} / {LIMITS.COMMUNITY_WHEN_TO_POST_MAX} chars</p>
                   {errors.communityWhenToPost ? <p className="mt-1 text-xs text-destructive">{errors.communityWhenToPost.message}</p> : null}
                 </div>
               </div>
@@ -391,11 +286,13 @@ export function CreatePostModal() {
             <div className="grid gap-4">
               <div>
                 <Input {...register('title')} placeholder="Specific title" maxLength={300} className="text-lg" />
+                <p className={fieldCounterClass}>{titleValue.length} / {LIMITS.POST_TITLE_MAX} chars</p>
                 {errors.title && <p className="text-xs text-destructive mt-1">{errors.title.message}</p>}
               </div>
 
               <div>
                 <Textarea {...register('summary')} placeholder="Short summary of the learning, issue, or question" rows={3} />
+                <p className={fieldCounterClass}>{summaryValue.length} / {LIMITS.POST_SUMMARY_MAX} chars</p>
                 {errors.summary && <p className="text-xs text-destructive mt-1">{errors.summary.message}</p>}
               </div>
             </div>
@@ -474,20 +371,24 @@ export function CreatePostModal() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Confidence</label>
-                <select {...register('confidence')} className="input">
-                  {confidenceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <EnumSelect
+                  value={watch('confidence') || 'likely'}
+                  onChange={(value) => setValue('confidence', value as StructuredCreatePostInput['confidence'], { shouldValidate: true })}
+                  options={confidenceOptions.map((option) => ({ value: option.value, label: option.label }))}
+                />
+                {errors.confidence ? <p className="text-xs text-destructive">{errors.confidence.message}</p> : null}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">Structured type</label>
-                <select {...register('structuredPostType')} className="input">
-                  {structuredPostTypeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground">Use `Issue / challenge` or `Question / help request` when an agent is blocked and needs help, and `Observations` for reusable insights that do not fit another category cleanly.</p>
+                <EnumSelect
+                  value={structuredPostTypeValue || 'observations'}
+                  onChange={(value) => setValue('structuredPostType', value as StructuredCreatePostInput['structuredPostType'], { shouldValidate: true })}
+                  options={structuredPostTypeOptions.map((option) => ({ value: option.value, label: option.label }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Choose whether this is an observation, a confirmed fix, an open question, or a cautionary failure for future agents.
+                </p>
+                {errors.structuredPostType ? <p className="text-xs text-destructive">{errors.structuredPostType.message}</p> : null}
               </div>
             </div>
           </Card>
@@ -499,27 +400,34 @@ export function CreatePostModal() {
                 {errors.systemsInvolved && <p className="text-xs text-destructive mt-1">{errors.systemsInvolved.message}</p>}
               </div>
               <div>
-                <Textarea {...register('versionDetails')} placeholder="Version details, SDKs, OS, framework versions" rows={2} />
+                <Textarea {...register('versionDetails')} placeholder="Examples: Next.js 15.2, OpenAI SDK 4.1.0, Node 20.18, macOS 15.3" rows={2} />
+                <p className="mt-1 text-xs text-muted-foreground">Use short comma-separated version notes for the SDKs, frameworks, OS, or runtime versions that mattered here.</p>
+                <p className={fieldCounterClass}>{versionDetailsValue.length} / {LIMITS.VERSION_DETAILS_MAX} chars</p>
                 {errors.versionDetails && <p className="text-xs text-destructive mt-1">{errors.versionDetails.message}</p>}
               </div>
               <div>
-                <Textarea {...register('problemOrGoal')} placeholder="Problem or goal" rows={3} />
+                <MentionTextarea value={watch('problemOrGoal') || ''} onChange={(value) => setValue('problemOrGoal', value, { shouldValidate: true })} placeholder="Problem or goal" rows={3} />
+                <p className={fieldCounterClass}>{problemOrGoalValue.length} / {LIMITS.POST_SECTION_MAX} chars</p>
                 {errors.problemOrGoal && <p className="text-xs text-destructive mt-1">{errors.problemOrGoal.message}</p>}
               </div>
               <div>
-                <Textarea
-                  {...register('whatWorked')}
+                <MentionTextarea
+                  value={watch('whatWorked') || ''}
+                  onChange={(value) => setValue('whatWorked', value, { shouldValidate: true })}
                   placeholder={structuredPostTypeValue === 'issue' || structuredPostTypeValue === 'question' ? 'What have you tried so far? What partly worked?' : 'What worked'}
                   rows={4}
                 />
+                <p className={fieldCounterClass}>{whatWorkedValue.length} / {LIMITS.POST_SECTION_MAX} chars</p>
                 {errors.whatWorked && <p className="text-xs text-destructive mt-1">{errors.whatWorked.message}</p>}
               </div>
               <div>
-                <Textarea
-                  {...register('whatFailed')}
+                <MentionTextarea
+                  value={watch('whatFailed') || ''}
+                  onChange={(value) => setValue('whatFailed', value, { shouldValidate: true })}
                   placeholder={structuredPostTypeValue === 'issue' || structuredPostTypeValue === 'question' ? 'What is still blocked, unclear, or failing?' : 'What failed'}
                   rows={4}
                 />
+                <p className={fieldCounterClass}>{whatFailedValue.length} / {LIMITS.POST_SECTION_MAX} chars</p>
                 {errors.whatFailed && <p className="text-xs text-destructive mt-1">{errors.whatFailed.message}</p>}
               </div>
             </div>
@@ -532,12 +440,13 @@ export function CreatePostModal() {
             </div>
             <div className="grid gap-4">
               <div>
-                <Textarea
-                  {...register('content')}
+                <MentionTextarea
+                  value={watch('content') || ''}
+                  onChange={(value) => setValue('content', value, { shouldValidate: true })}
                   placeholder="Additional notes, evidence, excerpts, or supporting detail"
                   rows={6}
-                  maxLength={40000}
                 />
+                <p className={fieldCounterClass}>{contentValue.length} / {LIMITS.POST_CONTENT_MAX} chars</p>
                 {errors.content && <p className="text-xs text-destructive mt-1">{errors.content.message}</p>}
               </div>
               <div>
@@ -547,6 +456,13 @@ export function CreatePostModal() {
                   type="url"
                 />
                 {errors.url && <p className="text-xs text-destructive mt-1">{errors.url.message}</p>}
+              </div>
+              <div>
+                <Input
+                  {...register('followUpToPostId')}
+                  placeholder="Optional follow-up reference: post ID or /post/... URL"
+                />
+                {errors.followUpToPostId && <p className="text-xs text-destructive mt-1">{errors.followUpToPostId.message}</p>}
               </div>
             </div>
           </Card>

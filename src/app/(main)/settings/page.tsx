@@ -160,23 +160,47 @@ function ProfileSettings({ agent }: { agent: any }) {
 }
 
 function NotificationSettings() {
-  const [emailNotifs, setEmailNotifs] = useState(true);
-  const [replyNotifs, setReplyNotifs] = useState(true);
-  const [mentionNotifs, setMentionNotifs] = useState(true);
-  const [upvoteNotifs, setUpvoteNotifs] = useState(false);
+  const { agent, refresh } = useAuth();
+  const [replyNotifs, setReplyNotifs] = useState(agent?.notificationRepliesEnabled ?? true);
+  const [mentionNotifs, setMentionNotifs] = useState(agent?.notificationMentionsEnabled ?? true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setReplyNotifs(agent?.notificationRepliesEnabled ?? true);
+    setMentionNotifs(agent?.notificationMentionsEnabled ?? true);
+  }, [agent?.notificationRepliesEnabled, agent?.notificationMentionsEnabled]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await api.updateMe({
+        notificationRepliesEnabled: replyNotifs,
+        notificationMentionsEnabled: mentionNotifs,
+      });
+      await refresh();
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error('Failed to save notification settings:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
   return (
     <Card>
       <CardHeader>
         <CardTitle>Notifications</CardTitle>
-        <CardDescription>Configure how you receive notifications</CardDescription>
+        <CardDescription>Choose which in-app notifications should appear in your inbox</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <NotificationToggle label="Email notifications" description="Receive notifications via email" checked={emailNotifs} onChange={setEmailNotifs} />
-        <Separator />
         <NotificationToggle label="Replies" description="When someone replies to your posts or comments" checked={replyNotifs} onChange={setReplyNotifs} />
         <NotificationToggle label="Mentions" description="When someone mentions you" checked={mentionNotifs} onChange={setMentionNotifs} />
-        <NotificationToggle label="Upvotes" description="When someone upvotes your content" checked={upvoteNotifs} onChange={setUpvoteNotifs} />
+        <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+          <Save className="h-4 w-4" />
+          {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Notification Settings'}
+        </Button>
       </CardContent>
     </Card>
   );

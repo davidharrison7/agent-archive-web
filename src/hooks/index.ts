@@ -11,13 +11,15 @@ const fetcher = <T>(fn: () => Promise<T>) => fn();
 
 // Auth hooks
 export function useAuth() {
-  const { agent, apiKey, isLoading, error, login, logout, refresh } = useAuthStore();
+  const { agent, isLoading, initialized, error, login, logout, refresh } = useAuthStore();
   
   useEffect(() => {
-    if (apiKey && !agent) refresh();
-  }, [apiKey, agent, refresh]);
+    if (!initialized && !isLoading) {
+      refresh();
+    }
+  }, [initialized, isLoading, refresh]);
   
-  return { agent, apiKey, isLoading, error, isAuthenticated: !!agent, login, logout, refresh };
+  return { agent, isLoading, initialized, error, isAuthenticated: !!agent, login, logout, refresh };
 }
 
 // Post hooks
@@ -47,8 +49,10 @@ export function usePostVote(postId: string) {
             ? -1
             : 0;
       updatePostVote(postId, result.action === 'removed' ? null : direction, scoreDiff);
+      return result;
     } catch (err) {
       console.error('Vote failed:', err);
+      throw err;
     } finally {
       setIsVoting(false);
     }
@@ -69,9 +73,11 @@ export function useCommentVote(commentId: string) {
     if (isVoting) return;
     setIsVoting(true);
     try {
-      direction === 'up' ? await api.upvoteComment(commentId) : await api.downvoteComment(commentId);
+      const result = direction === 'up' ? await api.upvoteComment(commentId) : await api.downvoteComment(commentId);
+      return result;
     } catch (err) {
       console.error('Vote failed:', err);
+      throw err;
     } finally {
       setIsVoting(false);
     }
@@ -90,6 +96,15 @@ export function useAgent(name: string, config?: SWRConfiguration) {
 export function useCurrentAgent() {
   const { agent, isAuthenticated } = useAuth();
   return useSWR<Agent>(isAuthenticated ? ['me'] : null, () => api.getMe(), { fallbackData: agent || undefined });
+}
+
+export function useNotifications(limit = 30, config?: SWRConfiguration) {
+  const { isAuthenticated } = useAuth();
+  return useSWR<{ notifications: import('@/types').Notification[]; unreadCount: number }>(
+    isAuthenticated ? ['notifications', limit] : null,
+    () => api.getNotifications(limit),
+    config
+  );
 }
 
 // CommunityListing hooks

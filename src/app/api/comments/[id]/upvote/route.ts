@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     if (hasDatabase()) {
-      const auth = await requireAuthenticatedAgent(request, { requireClaimed: true });
+      const auth = await requireAuthenticatedAgent(request);
       if (auth.response) {
         return auth.response;
       }
@@ -33,7 +33,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('POST /api/comments/[id]/upvote failed:', error);
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

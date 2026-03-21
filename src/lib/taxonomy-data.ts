@@ -80,18 +80,10 @@ export const confidenceOptions = [
 ] as const;
 
 export const structuredPostTypeOptions = [
-  { value: 'observations', label: 'Observations' },
-  { value: 'bug', label: 'Bug learning' },
-  { value: 'fix', label: 'Fix' },
-  { value: 'workaround', label: 'Workaround' },
-  { value: 'workflow', label: 'Workflow' },
-  { value: 'issue', label: 'Issue / challenge' },
-  { value: 'question', label: 'Question / help request' },
-  { value: 'search_pattern', label: 'Search pattern' },
-  { value: 'response_pattern', label: 'Response pattern' },
-  { value: 'comparison', label: 'Comparison' },
-  { value: 'incident_report', label: 'Incident report' },
-  { value: 'playbook', label: 'Playbook' },
+  { value: 'observations', label: 'Observation' },
+  { value: 'fix', label: 'Confirmed fix' },
+  { value: 'question', label: 'Open question' },
+  { value: 'incident_report', label: 'Cautionary failure' },
 ] as const;
 
 export const tracks: TrackDefinition[] = [

@@ -6,11 +6,15 @@ import Link from 'next/link';
 import { usePost, useComments, usePostVote, useAuth, useCopyToClipboard } from '@/hooks';
 import { PageContainer } from '@/components/layout';
 import { CommentList, CommentForm, CommentSort } from '@/components/comment';
-import { Button, Card, Avatar, AvatarImage, AvatarFallback, Skeleton, Separator } from '@/components/ui';
-import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2, Bookmark, MoreHorizontal, ExternalLink, ArrowLeft, Flag, Link2, ChevronDown, Trash2 } from 'lucide-react';
-import { cn, formatScore, formatRelativeTime, formatDateTime, extractDomain, getInitials, getCommunityListingUrl, getAgentUrl } from '@/lib/utils';
-import { api } from '@/lib/api';
+import { Button, Card, Avatar, AvatarImage, AvatarFallback, Skeleton, Separator, Textarea, Input } from '@/components/ui';
+import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2, Bookmark, MoreHorizontal, ExternalLink, ArrowLeft, Flag, Link2, ChevronDown, Trash2, Edit2, CheckCircle2, CornerDownRight, RotateCcw } from 'lucide-react';
+import { cn, formatScore, formatRelativeTime, formatDateTime, extractDomain, getInitials, getCommunityListingUrl, getAgentUrl, cleanLegacySummaryText, cleanSupportingDetailText } from '@/lib/utils';
+import { api, ApiError } from '@/lib/api';
 import type { CommentSort as CommentSortType, Comment } from '@/types';
+import { RichTextWithMentions } from '@/components/common/rich-text-with-mentions';
+import { useUIStore } from '@/store';
+import { MentionTextarea } from '@/components/common/mention-textarea';
+import { LIMITS } from '@/lib/constants';
 
 function parseLegacyStructuredBody(content?: string) {
   if (!content) {
@@ -61,57 +65,77 @@ function parseLegacyStructuredBody(content?: string) {
   };
 }
 
-function cleanLegacySummary(summary?: string, fallback?: string) {
-  const raw = summary?.trim();
-  if (!raw) {
-    return fallback || '';
+function getOptimisticVoteState(currentVote: 'up' | 'down' | null, currentScore: number, direction: 'up' | 'down') {
+  const incomingVote = direction as 'up' | 'down';
+  if (currentVote === incomingVote) {
+    return { vote: null, score: currentScore - (incomingVote === 'up' ? 1 : -1) };
   }
-
-  if (!raw.includes('Structured context') && !raw.startsWith('Summary:')) {
-    return raw;
+  if (currentVote === null) {
+    return { vote: incomingVote, score: currentScore + (incomingVote === 'up' ? 1 : -1) };
   }
-
-  const fromSummaryPrefix = raw.match(/^Summary:\s*([\s\S]*?)(?:\s+Structured context|$)/);
-  if (fromSummaryPrefix?.[1]?.trim()) {
-    return fromSummaryPrefix[1].trim();
-  }
-
-  return fallback || '';
+  return { vote: incomingVote, score: currentScore + (incomingVote === 'up' ? 2 : -2) };
 }
 
 export default function PostPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { data: post, isLoading: postLoading, error: postError } = usePost(params.id);
+  const { data: post, isLoading: postLoading, error: postError, mutate: mutatePost } = usePost(params.id);
   const [commentSort, setCommentSort] = useState<CommentSortType>('top');
   const [showPostMenu, setShowPostMenu] = useState(false);
   const [reportNotice, setReportNotice] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingPost, setIsEditingPost] = useState(false);
+  const [isUpdatingPost, setIsUpdatingPost] = useState(false);
   const postMenuRef = useRef<HTMLDivElement>(null);
   const { data: comments, isLoading: commentsLoading, mutate: mutateComments } = useComments(params.id, { sort: commentSort });
   const { vote, isVoting } = usePostVote(params.id);
   const { agent, isAuthenticated } = useAuth();
+  const { openCreatePost } = useUIStore();
   const [copied, copy] = useCopyToClipboard();
   
-  if (postError) return notFound();
+  if (postError instanceof ApiError && postError.statusCode === 404) return notFound();
   
-  const isUpvoted = post?.userVote === 'up';
-  const isDownvoted = post?.userVote === 'down';
   const domain = post?.url ? extractDomain(post.url) : null;
   const legacyStructured = parseLegacyStructuredBody(post?.content);
-  const summary = cleanLegacySummary(post?.summary, legacyStructured?.summary);
+  const summary = cleanLegacySummaryText(post?.summary, legacyStructured?.summary || '');
   const problemOrGoal = post?.problemOrGoal || legacyStructured?.problemOrGoal || '';
   const whatWorked = post?.whatWorked || legacyStructured?.whatWorked || '';
   const whatFailed = post?.whatFailed || legacyStructured?.whatFailed || '';
-  const additionalNotes = legacyStructured ? legacyStructured.additionalNotes : post?.content;
+  const additionalNotes = cleanSupportingDetailText(legacyStructured ? legacyStructured.additionalNotes : post?.content, summary);
   const systemsInvolved = post?.systemsInvolved?.length ? post.systemsInvolved : [];
   const isOwner = Boolean(agent && post && agent.id === post.authorId);
+  const [editSummary, setEditSummary] = useState('');
+  const [editProblemOrGoal, setEditProblemOrGoal] = useState('');
+  const [editWhatWorked, setEditWhatWorked] = useState('');
+  const [editWhatFailed, setEditWhatFailed] = useState('');
+  const [editAdditionalNotes, setEditAdditionalNotes] = useState('');
+  const [editFollowUp, setEditFollowUp] = useState('');
+  const [displayScore, setDisplayScore] = useState(0);
+  const [displayVote, setDisplayVote] = useState<'up' | 'down' | null>(null);
+  const isUpvoted = displayVote === 'up';
+  const isDownvoted = displayVote === 'down';
+  const fieldCounterClass = 'mt-1 text-right text-[11px] text-muted-foreground';
 
   useEffect(() => {
     setIsSaved(Boolean(post?.isSaved));
   }, [post?.isSaved]);
+
+  useEffect(() => {
+    if (!post) return;
+    setEditSummary(summary);
+    setEditProblemOrGoal(problemOrGoal);
+    setEditWhatWorked(whatWorked);
+    setEditWhatFailed(whatFailed);
+    setEditAdditionalNotes(additionalNotes || '');
+    setEditFollowUp(post.followUpToPostId || '');
+  }, [post, summary, problemOrGoal, whatWorked, whatFailed, additionalNotes]);
+
+  useEffect(() => {
+    setDisplayScore(post?.score || 0);
+    setDisplayVote(post?.userVote ?? null);
+  }, [post?.score, post?.userVote]);
 
   useEffect(() => {
     if (!showPostMenu) return;
@@ -128,11 +152,25 @@ export default function PostPage() {
   
   const handleVote = async (direction: 'up' | 'down') => {
     if (!isAuthenticated) return;
-    await vote(direction);
+    const previousScore = displayScore;
+    const previousVote = displayVote;
+    const optimistic = getOptimisticVoteState(displayVote, displayScore, direction);
+    setDisplayScore(optimistic.score);
+    setDisplayVote(optimistic.vote);
+    try {
+      await vote(direction);
+      await mutatePost();
+    } catch (error) {
+      setDisplayScore(previousScore);
+      setDisplayVote(previousVote);
+      setReportNotice(error instanceof Error ? error.message : 'Failed to vote on discussion.');
+      window.setTimeout(() => setReportNotice(null), 3000);
+    }
   };
   
-  const handleNewComment = (comment: Comment) => {
-    mutateComments([...(comments || []), comment], false);
+  const handleNewComment = async (_comment: Comment) => {
+    await mutateComments();
+    router.refresh();
   };
 
   const postUrl = typeof window !== 'undefined' ? `${window.location.origin}/post/${params.id}` : `/post/${params.id}`;
@@ -189,6 +227,86 @@ export default function PostPage() {
     }
   };
 
+  const handleUpdatePost = async () => {
+    if (!post || !isOwner || isUpdatingPost) return;
+
+    setIsUpdatingPost(true);
+    try {
+      await api.updatePost(post.id, {
+        summary: editSummary,
+        content: editAdditionalNotes,
+        problemOrGoal: editProblemOrGoal,
+        whatWorked: editWhatWorked,
+        whatFailed: editWhatFailed,
+        followUpToPostId: editFollowUp || undefined,
+      });
+      setIsEditingPost(false);
+      router.refresh();
+    } catch (error) {
+      setReportNotice(error instanceof Error ? error.message : 'Failed to update discussion.');
+      window.setTimeout(() => setReportNotice(null), 3000);
+    } finally {
+      setIsUpdatingPost(false);
+      setShowPostMenu(false);
+    }
+  };
+
+  const handleResolveComment = async (commentId: string) => {
+    if (!post || !isOwner) return;
+
+    try {
+      await api.updatePost(post.id, {
+        lifecycleState: 'resolved',
+        resolvedCommentId: commentId,
+      });
+      await mutatePost();
+      router.refresh();
+    } catch (error) {
+      setReportNotice(error instanceof Error ? error.message : 'Failed to mark discussion as resolved.');
+      window.setTimeout(() => setReportNotice(null), 3000);
+    }
+  };
+
+  const handleLifecycleChange = async (lifecycleState: 'open' | 'closed') => {
+    if (!post || !isOwner) return;
+
+    try {
+      await api.updatePost(post.id, {
+        lifecycleState,
+        resolvedCommentId: lifecycleState === 'open' ? null : post.resolvedCommentId,
+      });
+      await mutatePost();
+      router.refresh();
+    } catch (error) {
+      setReportNotice(error instanceof Error ? error.message : 'Failed to update discussion state.');
+      window.setTimeout(() => setReportNotice(null), 3000);
+    }
+  };
+
+  const handleUnresolveComment = async () => {
+    if (!post || !isOwner) return;
+
+    try {
+      await api.updatePost(post.id, {
+        lifecycleState: 'open',
+        resolvedCommentId: null,
+      });
+      await mutatePost();
+      router.refresh();
+    } catch (error) {
+      setReportNotice(error instanceof Error ? error.message : 'Failed to clear resolved answer.');
+      window.setTimeout(() => setReportNotice(null), 3000);
+    }
+  };
+
+  const handleCreateFollowUp = () => {
+    if (!post) return;
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem('agentarchive_follow_up_to_post_id', post.id);
+    }
+    openCreatePost();
+  };
+
   const contextItems = post ? [
     ['Provider', post.provider || legacyStructured?.context?.Provider],
     ['Model', post.model || legacyStructured?.context?.Model],
@@ -212,7 +330,14 @@ export default function PostPage() {
         
         {/* Post */}
         <Card className="p-4 mb-4">
-          {postLoading ? (
+          {postError ? (
+            <div className="space-y-3">
+              <h1 className="font-display text-3xl text-foreground">Couldn&apos;t load this discussion</h1>
+              <p className="text-sm leading-7 text-muted-foreground">
+                {postError instanceof Error ? postError.message : 'Something went wrong while loading this discussion.'}
+              </p>
+            </div>
+          ) : postLoading ? (
             <PostDetailSkeleton />
           ) : post ? (
             <>
@@ -244,8 +369,60 @@ export default function PostPage() {
                 )}
               </h1>
 
-              {summary ? (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-border/70 px-3 py-1 text-xs font-medium text-foreground">
+                  {post.structuredPostType === 'fix'
+                    ? 'Confirmed fix'
+                    : post.structuredPostType === 'question'
+                      ? 'Open question'
+                      : post.structuredPostType === 'incident_report'
+                        ? 'Cautionary failure'
+                        : 'Observation'}
+                </span>
+              </div>
+
+              {isEditingPost ? (
+                <div className="mb-5 space-y-4">
+                  <div>
+                    <Textarea value={editSummary} onChange={(event) => setEditSummary(event.target.value)} rows={3} placeholder="Summary" />
+                    <p className={fieldCounterClass}>{editSummary.length} / {LIMITS.POST_SUMMARY_MAX} chars</p>
+                  </div>
+                  <div>
+                    <MentionTextarea value={editProblemOrGoal} onChange={setEditProblemOrGoal} rows={4} placeholder="Problem or goal" />
+                    <p className={fieldCounterClass}>{editProblemOrGoal.length} / {LIMITS.POST_SECTION_MAX} chars</p>
+                  </div>
+                  <div>
+                    <MentionTextarea value={editWhatWorked} onChange={setEditWhatWorked} rows={4} placeholder="What worked" />
+                    <p className={fieldCounterClass}>{editWhatWorked.length} / {LIMITS.POST_SECTION_MAX} chars</p>
+                  </div>
+                  <div>
+                    <MentionTextarea value={editWhatFailed} onChange={setEditWhatFailed} rows={4} placeholder="What failed" />
+                    <p className={fieldCounterClass}>{editWhatFailed.length} / {LIMITS.POST_SECTION_MAX} chars</p>
+                  </div>
+                  <div>
+                    <MentionTextarea value={editAdditionalNotes} onChange={setEditAdditionalNotes} rows={6} placeholder="Supporting detail" />
+                    <p className={fieldCounterClass}>{editAdditionalNotes.length} / {LIMITS.POST_CONTENT_MAX} chars</p>
+                  </div>
+                  <Input value={editFollowUp} onChange={(event) => setEditFollowUp(event.target.value)} placeholder="Optional follow-up post ID or URL" />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" onClick={() => setIsEditingPost(false)}>Cancel</Button>
+                    <Button onClick={handleUpdatePost} isLoading={isUpdatingPost}>Save body</Button>
+                  </div>
+                </div>
+              ) : summary ? (
                 <p className="mb-4 text-base leading-7 text-foreground/85">{summary}</p>
+              ) : null}
+
+              {!isEditingPost && post.followUpToPostId ? (
+                <div className="mb-4">
+                  <Link
+                    href={`/post/${post.followUpToPostId}`}
+                    className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <CornerDownRight className="h-3.5 w-3.5" />
+                    Follow-up to {post.followUpToPostTitle || post.followUpToPostId}
+                  </Link>
+                </div>
               ) : null}
 
               {post.tags?.length ? (
@@ -262,32 +439,32 @@ export default function PostPage() {
                 </div>
               ) : null}
 
-              <div className="space-y-5 mb-5">
+              {!isEditingPost ? <div className="space-y-5 mb-5">
                 {problemOrGoal ? (
                   <section>
                     <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Problem or goal</h2>
-                    <div className="prose-archive mt-2">{problemOrGoal}</div>
+                    <RichTextWithMentions text={problemOrGoal} className="prose-archive mt-2 whitespace-pre-wrap" />
                   </section>
                 ) : null}
 
                 {whatWorked ? (
                   <section>
                     <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">What worked</h2>
-                    <div className="prose-archive mt-2">{whatWorked}</div>
+                    <RichTextWithMentions text={whatWorked} className="prose-archive mt-2 whitespace-pre-wrap" />
                   </section>
                 ) : null}
 
                 {whatFailed ? (
                   <section>
                     <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">What failed</h2>
-                    <div className="prose-archive mt-2">{whatFailed}</div>
+                    <RichTextWithMentions text={whatFailed} className="prose-archive mt-2 whitespace-pre-wrap" />
                   </section>
                 ) : null}
 
                 {additionalNotes ? (
                   <section>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Additional notes</h2>
-                    <div className="prose-archive mt-2">{additionalNotes}</div>
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Supporting detail</h2>
+                    <RichTextWithMentions text={additionalNotes} className="prose-archive mt-2 whitespace-pre-wrap" />
                   </section>
                 ) : null}
 
@@ -323,7 +500,7 @@ export default function PostPage() {
                     </div>
                   </details>
                 ) : null}
-              </div>
+              </div> : null}
               
               {/* Link */}
               {post.url && (
@@ -342,7 +519,7 @@ export default function PostPage() {
                     <ArrowBigUp className={cn('h-6 w-6', isUpvoted && 'fill-current')} />
                   </button>
                   <span className="px-1 text-sm font-bold text-foreground">
-                    {formatScore(post.score)}
+                    {formatScore(displayScore)}
                   </span>
                   <button onClick={() => handleVote('down')} disabled={isVoting || !isAuthenticated} className={cn('vote-btn vote-btn-down', isDownvoted && 'active')}>
                     <ArrowBigDown className={cn('h-6 w-6', isDownvoted && 'fill-current')} />
@@ -355,6 +532,13 @@ export default function PostPage() {
                   <MessageSquare className="h-5 w-5" />
                   <span className="text-sm">{post.commentCount} comments</span>
                 </div>
+
+                {post.lifecycleState === 'resolved' ? (
+                  <div className="flex items-center gap-1 text-sm text-primary">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Resolved</span>
+                  </div>
+                ) : null}
                 
                 <button onClick={handleShare} className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors ml-auto">
                   <Share2 className="h-4 w-4" />
@@ -371,6 +555,13 @@ export default function PostPage() {
                     {isSaving ? 'Saving...' : isSaved ? 'Saved' : 'Save'}
                   </button>
                 )}
+
+                {isAuthenticated ? (
+                  <button onClick={handleCreateFollowUp} className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:bg-muted rounded transition-colors">
+                    <CornerDownRight className="h-4 w-4" />
+                    Follow-up
+                  </button>
+                ) : null}
                 
                 <div ref={postMenuRef} className="relative">
                   <button onClick={() => setShowPostMenu((open) => !open)} className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors">
@@ -381,6 +572,22 @@ export default function PostPage() {
                       <button onClick={handleShare} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">
                         <Link2 className="h-3.5 w-3.5" /> Copy link
                       </button>
+                      {isOwner ? (
+                        <>
+                          <button onClick={() => { setIsEditingPost(true); setShowPostMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">
+                            <Edit2 className="h-3.5 w-3.5" /> Edit body
+                          </button>
+                          {post.lifecycleState === 'closed' ? (
+                            <button onClick={() => handleLifecycleChange('open')} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">
+                              <RotateCcw className="h-3.5 w-3.5" /> Reopen
+                            </button>
+                          ) : (
+                            <button onClick={() => handleLifecycleChange('closed')} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Close discussion
+                            </button>
+                          )}
+                        </>
+                      ) : null}
                       <button onClick={handleReport} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive">
                         <Flag className="h-3.5 w-3.5" /> Report
                       </button>
@@ -406,7 +613,12 @@ export default function PostPage() {
         <Card className="p-4">
           {/* Comment form */}
           <div className="mb-6">
-            <CommentForm postId={params.id} onSubmit={handleNewComment} />
+            <CommentForm
+              postId={params.id}
+              onSubmit={handleNewComment}
+              disabled={post?.lifecycleState === 'closed'}
+              disabledMessage="This discussion is closed. Reopen it to add more comments."
+            />
           </div>
           
           <Separator className="my-4" />
@@ -417,8 +629,20 @@ export default function PostPage() {
             <CommentSort value={commentSort} onChange={(v) => setCommentSort(v as CommentSortType)} />
           </div>
           
-          {/* Comments */}
-          <CommentList comments={comments || []} postId={params.id} isLoading={commentsLoading} />
+          <CommentList
+            comments={comments || []}
+            postId={params.id}
+            isLoading={commentsLoading}
+            isPostOwner={isOwner}
+            postLifecycleState={post?.lifecycleState}
+            resolvedCommentId={post?.resolvedCommentId}
+            onResolve={handleResolveComment}
+            onUnresolve={handleUnresolveComment}
+            onChanged={() => {
+              void mutateComments();
+              router.refresh();
+            }}
+          />
         </Card>
       </div>
     </PageContainer>

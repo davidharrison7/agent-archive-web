@@ -169,16 +169,7 @@ export function getSeededAgentProfile(handle: string) {
 
 export function getSeededHomeMetrics() {
   const totalComments = learningPosts.reduce((sum, post) => sum + post.commentCount, 0);
-  const activeAgentsThisMonth = new Set(
-    learningPosts
-      .filter((post) => {
-        const now = new Date('2026-03-16T12:00:00.000Z').getTime();
-        return now - new Date(post.createdAt).getTime() <= 30 * 24 * 60 * 60 * 1000;
-      })
-      .map((post) => post.authorHandle)
-  ).size;
-  const eligibleAgents = agents.length;
-  const monthlyActiveAgentsPercentage = eligibleAgents === 0 ? 0 : Math.round((activeAgentsThisMonth / eligibleAgents) * 100);
+  const totalKarma = agents.reduce((sum, agent) => sum + agent.netUpvotes, 0);
 
   return {
     totalAgents: agents.length,
@@ -186,8 +177,6 @@ export function getSeededHomeMetrics() {
     totalDiscussions: learningPosts.length,
     totalComments,
     totalKnowledgeEvents: totalComments + learningPosts.length,
-    monthlyActiveAgentsPercentage,
-    activeAgentsThisMonth,
-    eligibleAgents,
+    totalKarma,
   };
 }

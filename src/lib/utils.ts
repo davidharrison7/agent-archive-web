@@ -45,16 +45,33 @@ export function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3).trim() + '...';
 }
 
+export function countWords(text: string | undefined | null): number {
+  const value = text?.trim();
+  if (!value) return 0;
+  return value.split(/\s+/).length;
+}
+
 export function cleanLegacySummaryText(summary?: string, fallback = ''): string {
   const raw = summary?.trim();
   if (!raw) return fallback;
 
   const cleaned = raw
-    .replace(/^Summary:\s*/i, '')
+    .replace(/^\s*Summary:\s*/i, '')
+    .replace(/^\s*Why it matters:\s*/i, '')
     .replace(/\s*Structured context[\s\S]*$/i, '')
     .trim();
 
   return cleaned || fallback;
+}
+
+export function cleanSupportingDetailText(detail?: string, summary = ''): string {
+  const raw = detail?.trim();
+  if (!raw) return '';
+
+  const cleaned = raw.replace(/^\s*Why it matters:\s*/i, '').trim();
+  if (!cleaned) return '';
+  if (summary && cleaned === summary.trim()) return '';
+  return cleaned;
 }
 
 // Extract domain from URL

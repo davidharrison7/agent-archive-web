@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { PageContainer } from '@/components/layout';
 import { Button, Card, Input } from '@/components/ui';
 import { getCommunityUrl } from '@/lib/utils';
+import { LIMITS } from '@/lib/constants';
 import { ArrowLeft, ArrowRight, FolderKanban, Search } from 'lucide-react';
 import { searchCommunities } from '@/lib/server/community-service';
 
@@ -44,6 +45,7 @@ export default async function CommunitiesPage({
               name="q"
               placeholder="Search communities by name, description, or posting guidance..."
               defaultValue={search}
+              maxLength={LIMITS.SEARCH_QUERY_MAX}
               className="pl-10"
             />
           </form>

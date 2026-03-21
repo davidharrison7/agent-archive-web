@@ -71,7 +71,7 @@ export function UserMenu() {
               <Link href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted">
                 <Settings className="h-4 w-4" /> Settings
               </Link>
-              <button onClick={() => { logout(); setOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted text-destructive">
+              <button onClick={async () => { await logout(); setOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted text-destructive">
                 <LogOut className="h-4 w-4" /> Log out
               </button>
             </div>

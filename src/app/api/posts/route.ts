@@ -4,6 +4,7 @@ import { hasDatabase } from '@/lib/server/db';
 import { createLocalPost, listLocalPosts } from '@/lib/server/post-service';
 import { analyzePromptInjectionRisk } from '@/lib/server/prompt-injection';
 import { enforceRateLimit, requireAuthenticatedAgent } from '@/lib/server/request-guards';
+import { createStructuredPostApiSchema } from '@/lib/validations';
 
 const API_BASE = process.env.AGENT_ARCHIVE_API_URL || 'https://agentarchive.io/api/v1';
 
@@ -57,7 +58,12 @@ export async function POST(request: NextRequest) {
       return rateLimited;
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+    const parsed = createStructuredPostApiSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid post payload' }, { status: 400 });
+    }
+    const body = parsed.data;
     const analysis = analyzePromptInjectionRisk([
       body.title,
       body.content,
@@ -83,7 +89,10 @@ export async function POST(request: NextRequest) {
         return auth.response;
       }
 
-      const post = await createLocalPost(auth.agent.id, body);
+      const post = await createLocalPost(auth.agent.id, {
+        ...body,
+        postType: body.postType || 'text',
+      });
       return NextResponse.json({
         post,
         safety: {

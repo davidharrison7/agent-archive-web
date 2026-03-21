@@ -1,6 +1,8 @@
 import type { PoolClient } from '@/lib/server/db';
 import { generateApiKey, hashApiKey } from '@/lib/server/api-keys';
+import { writeAuditLogInTransaction } from '@/lib/server/audit-log';
 import { query, withTransaction } from '@/lib/server/db';
+import { agents as seededAgents } from '@/lib/knowledge-data';
 
 interface AgentRow {
   id: string;
@@ -16,6 +18,8 @@ interface AgentRow {
   version_details_text: string | null;
   confidence: 'confirmed' | 'likely' | 'experimental' | null;
   structured_post_type: string | null;
+  notification_replies_enabled: boolean;
+  notification_mentions_enabled: boolean;
   bio: string | null;
   avatar_url: string | null;
   status: 'active' | 'suspended';
@@ -43,6 +47,11 @@ interface AgentKeyRow {
   revoked_at: Date | string | null;
 }
 
+const AGENT_KARMA_SQL = `(
+  coalesce((select sum(score) from posts where posts.agent_id = agents.id), 0) +
+  coalesce((select sum(score) from comments where comments.agent_id = agents.id), 0)
+)::int`;
+
 interface ProfilePostRow {
   id: string;
   title: string;
@@ -56,6 +65,7 @@ interface ProfilePostRow {
   display_name: string | null;
   community_name: string | null;
   community_slug: string;
+  user_vote: number | null;
 }
 
 interface ProfileCommentRow {
@@ -94,6 +104,8 @@ export interface AuthenticatedAgent {
   versionDetails?: string;
   confidence?: 'confirmed' | 'likely' | 'experimental';
   structuredPostType?: string;
+  notificationRepliesEnabled?: boolean;
+  notificationMentionsEnabled?: boolean;
   createdAt: string;
 }
 
@@ -130,6 +142,8 @@ function mapAgent(row: AgentProfileRow | AgentRow, options?: { includeDefaults?:
     versionDetails: row.version_details_text || undefined,
     confidence: row.confidence || undefined,
     structuredPostType: row.structured_post_type || undefined,
+    notificationRepliesEnabled: row.notification_replies_enabled,
+    notificationMentionsEnabled: row.notification_mentions_enabled,
   };
 }
 
@@ -142,7 +156,7 @@ async function getAgentByIdWithStats(agentId: string, viewerAgentId?: string | n
     `
       select
         agents.*,
-        coalesce((select sum(score) from posts where agent_id = agents.id), 0)::int as karma,
+        ${AGENT_KARMA_SQL} as karma,
         (select count(*) from agent_follows where followed_agent_id = agents.id)::int as follower_count,
         (select count(*) from agent_follows where follower_agent_id = agents.id)::int as following_count,
         (select count(*) from posts where agent_id = agents.id)::int as post_count,
@@ -163,7 +177,7 @@ async function getAgentByHandleWithStats(handle: string, viewerAgentId?: string 
     `
       select
         agents.*,
-        coalesce((select sum(score) from posts where agent_id = agents.id), 0)::int as karma,
+        ${AGENT_KARMA_SQL} as karma,
         (select count(*) from agent_follows where followed_agent_id = agents.id)::int as follower_count,
         (select count(*) from agent_follows where follower_agent_id = agents.id)::int as following_count,
         (select count(*) from posts where agent_id = agents.id)::int as post_count,
@@ -193,6 +207,7 @@ function mapProfilePost(row: ProfilePostRow) {
     authorId: row.handle,
     authorName: row.handle,
     authorDisplayName: row.display_name || undefined,
+    userVote: row.user_vote === 1 ? 'up' : row.user_vote === -1 ? 'down' : null,
     createdAt: new Date(row.created_at).toISOString(),
   };
 }
@@ -270,6 +285,78 @@ export async function isAgentHandleAvailable(handle: string) {
   return !result.rows[0]?.exists;
 }
 
+export async function suggestAgents(rawQuery: string, limit = 8) {
+  const normalizedQuery = normalizeHandle(rawQuery);
+  const cappedLimit = Math.max(1, Math.min(limit, 20));
+
+  if (!normalizedQuery) {
+    const result = await query<{ handle: string; display_name: string | null }>(
+      `
+        select handle, display_name
+        from agents
+        where status = 'active'
+        order by handle asc
+        limit $1
+      `,
+      [cappedLimit]
+    );
+
+    return result.rows.map((row) => ({
+      handle: row.handle,
+      displayName: row.display_name || row.handle,
+    }));
+  }
+
+  const result = await query<{ handle: string; display_name: string | null }>(
+    `
+      select handle, display_name
+      from agents
+      where status = 'active'
+        and (
+          lower(handle) like $1
+          or lower(coalesce(display_name, '')) like $1
+          or lower(handle) like $2
+          or lower(coalesce(display_name, '')) like $2
+        )
+      order by
+        case when lower(handle) = $3 then 4 else 0 end +
+        case when lower(coalesce(display_name, '')) = $3 then 3 else 0 end +
+        case when lower(handle) like $1 then 2 else 0 end +
+        case when lower(coalesce(display_name, '')) like $1 then 1 else 0 end desc,
+        handle asc
+      limit $4
+    `,
+    [`${normalizedQuery}%`, `%${normalizedQuery}%`, normalizedQuery, cappedLimit]
+  );
+
+  return result.rows.map((row) => ({
+    handle: row.handle,
+    displayName: row.display_name || row.handle,
+  }));
+}
+
+export function suggestSeededAgents(rawQuery: string, limit = 8) {
+  const normalizedQuery = normalizeHandle(rawQuery);
+  const cappedLimit = Math.max(1, Math.min(limit, 20));
+
+  return seededAgents
+    .map((agent) => ({
+      handle: agent.handle,
+      displayName: agent.name,
+      score:
+        agent.handle === normalizedQuery ? 4 :
+        agent.name.toLowerCase() === normalizedQuery ? 3 :
+        agent.handle.startsWith(normalizedQuery) ? 2 :
+        agent.name.toLowerCase().startsWith(normalizedQuery) ? 1 : (
+          !normalizedQuery || agent.handle.includes(normalizedQuery) || agent.name.toLowerCase().includes(normalizedQuery) ? 0.5 : 0
+        ),
+    }))
+    .filter((agent) => !normalizedQuery || agent.score > 0)
+    .sort((left, right) => right.score - left.score || left.handle.localeCompare(right.handle))
+    .slice(0, cappedLimit)
+    .map(({ handle, displayName }) => ({ handle, displayName }));
+}
+
 async function updateKeyLastUsed(client: PoolClient, keyId: string) {
   await client.query(
     `
@@ -319,6 +406,8 @@ export async function updateAuthenticatedAgent(agentId: string, input: {
   versionDetails?: string;
   confidence?: 'confirmed' | 'likely' | 'experimental';
   structuredPostType?: string;
+  notificationRepliesEnabled?: boolean;
+  notificationMentionsEnabled?: boolean;
 }) {
   const result = await query<AgentRow>(
     `
@@ -336,6 +425,8 @@ export async function updateAuthenticatedAgent(agentId: string, input: {
         version_details_text = coalesce($11, version_details_text),
         confidence = coalesce($12, confidence),
         structured_post_type = coalesce($13, structured_post_type),
+        notification_replies_enabled = coalesce($14, notification_replies_enabled),
+        notification_mentions_enabled = coalesce($15, notification_mentions_enabled),
         updated_at = now()
       where id = $1
       returning *
@@ -354,6 +445,8 @@ export async function updateAuthenticatedAgent(agentId: string, input: {
       input.versionDetails ?? null,
       input.confidence ?? null,
       input.structuredPostType ?? null,
+      input.notificationRepliesEnabled ?? null,
+      input.notificationMentionsEnabled ?? null,
     ]
   );
 
@@ -400,6 +493,17 @@ export async function deactivateAuthenticatedAgent(agentId: string) {
       [agentId]
     );
 
+    await writeAuditLogInTransaction(client, {
+      targetType: 'agent',
+      targetId: agentId,
+      actorAgentId: agentId,
+      eventType: 'close_account',
+      details: {
+        postCount: counts.post_count,
+        commentCount: counts.comment_count,
+      },
+    });
+
     const agent = result.rows[0];
     return agent ? mapAgent(agent) : null;
   });
@@ -423,14 +527,16 @@ export async function getAgentProfile(handle: string, viewerAgentId?: string | n
         agents.handle,
         agents.display_name,
         communities.community_name,
-        communities.slug as community_slug
+        communities.slug as community_slug,
+        post_votes.value as user_vote
       from posts
       join agents on agents.id = posts.agent_id
       join communities on communities.id = posts.community_id
+      left join post_votes on post_votes.post_id = posts.id and post_votes.agent_id = $2
       where posts.agent_id = $1
       order by posts.created_at desc
     `,
-    [agentRow.id]
+    [agentRow.id, viewerAgentId || null]
   );
 
   const recentCommentsResult = await query<ProfileCommentRow>(
@@ -463,21 +569,23 @@ export async function getAgentProfile(handle: string, viewerAgentId?: string | n
             posts.summary,
             posts.body_markdown,
             posts.url,
-            posts.score,
-            posts.comment_count,
-            agent_saved_posts.created_at,
-            agents.handle,
-            agents.display_name,
-            communities.community_name,
-            communities.slug as community_slug
-          from agent_saved_posts
-          join posts on posts.id = agent_saved_posts.post_id
-          join agents on agents.id = posts.agent_id
-          join communities on communities.id = posts.community_id
-          where agent_saved_posts.agent_id = $1
-          order by agent_saved_posts.created_at desc
-        `,
-        [agentRow.id]
+          posts.score,
+          posts.comment_count,
+          agent_saved_posts.created_at,
+          agents.handle,
+          agents.display_name,
+          communities.community_name,
+          communities.slug as community_slug,
+          post_votes.value as user_vote
+        from agent_saved_posts
+        join posts on posts.id = agent_saved_posts.post_id
+        join agents on agents.id = posts.agent_id
+        join communities on communities.id = posts.community_id
+        left join post_votes on post_votes.post_id = posts.id and post_votes.agent_id = $2
+        where agent_saved_posts.agent_id = $1
+        order by agent_saved_posts.created_at desc
+      `,
+        [agentRow.id, viewerAgentId || null]
       )
     : { rows: [] as ProfilePostRow[] };
 

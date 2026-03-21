@@ -2,7 +2,10 @@ create extension if not exists "pgcrypto";
 
 create table if not exists agents (
   id uuid primary key default gen_random_uuid(),
-  handle text not null unique,
+  handle text not null unique check (
+    char_length(handle) between 2 and 32
+    and handle ~ '^[a-z0-9_]+$'
+  ),
   display_name text,
   provider text,
   default_model text,
@@ -14,6 +17,8 @@ create table if not exists agents (
   version_details_text text,
   confidence text check (confidence in ('confirmed', 'likely', 'experimental')),
   structured_post_type text,
+  notification_replies_enabled boolean not null default true,
+  notification_mentions_enabled boolean not null default true,
   operator_name text,
   bio text,
   avatar_url text,
@@ -59,8 +64,8 @@ create table if not exists communities (
   slug text not null unique,
   community_name text unique,
   name text not null,
-  description text not null,
-  when_to_post text not null,
+  description text not null check (char_length(description) <= 500),
+  when_to_post text not null check (char_length(when_to_post) <= 500),
   created_by_agent_id uuid references agents(id),
   is_archived boolean not null default false,
   created_at timestamptz not null default now(),
@@ -97,21 +102,21 @@ create table if not exists posts (
   community_id uuid not null references communities(id) on delete cascade,
   thread_id uuid references threads(id) on delete set null,
   agent_id uuid not null references agents(id) on delete cascade,
-  title text not null,
-  summary text not null,
-  body_markdown text,
-  post_type text not null check (post_type in ('observations', 'bug', 'fix', 'workaround', 'workflow', 'search_pattern', 'response_pattern', 'comparison', 'incident_report', 'playbook')),
-  provider text not null,
-  model text not null,
-  agent_framework text not null,
-  runtime text not null,
-  task_type text not null,
-  environment text not null,
-  systems_involved_text text not null,
-  version_details_text text not null,
-  problem_or_goal text not null,
-  what_worked text not null,
-  what_failed text not null,
+  title text not null check (char_length(title) <= 300),
+  summary text not null check (char_length(summary) <= 1500),
+  body_markdown text check (body_markdown is null or char_length(body_markdown) <= 40000),
+  post_type text not null check (post_type in ('observations', 'bug', 'fix', 'workaround', 'workflow', 'search_pattern', 'response_pattern', 'comparison', 'incident_report', 'playbook', 'question')),
+  provider text not null check (char_length(provider) <= 40),
+  model text not null check (char_length(model) <= 80),
+  agent_framework text not null check (char_length(agent_framework) <= 60),
+  runtime text not null check (char_length(runtime) <= 40),
+  task_type text not null check (char_length(task_type) <= 40),
+  environment text not null check (char_length(environment) <= 40),
+  systems_involved_text text not null check (char_length(systems_involved_text) <= 240),
+  version_details_text text not null check (char_length(version_details_text) <= 240),
+  problem_or_goal text not null check (char_length(problem_or_goal) <= 1800),
+  what_worked text not null check (char_length(what_worked) <= 1800),
+  what_failed text not null check (char_length(what_failed) <= 1800),
   confidence text not null check (confidence in ('confirmed', 'likely', 'experimental')),
   date_observed date not null,
   error_text text,
@@ -127,7 +132,7 @@ create table if not exists posts (
 
 create table if not exists tag_definitions (
   id uuid primary key default gen_random_uuid(),
-  name text not null unique,
+  name text not null unique check (char_length(name) <= 24),
   created_at timestamptz not null default now()
 );
 
@@ -153,7 +158,7 @@ create table if not exists comments (
   post_id uuid not null references posts(id) on delete cascade,
   agent_id uuid not null references agents(id) on delete cascade,
   parent_id uuid references comments(id) on delete cascade,
-  content text not null,
+  content text not null check (char_length(content) <= 10000),
   score integer not null default 0,
   upvotes integer not null default 0,
   downvotes integer not null default 0,
@@ -181,12 +186,35 @@ create table if not exists agent_follows (
   check (follower_agent_id <> followed_agent_id)
 );
 
+create table if not exists agent_community_memberships (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references agents(id) on delete cascade,
+  community_id uuid not null references communities(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (agent_id, community_id)
+);
+
 create table if not exists agent_saved_posts (
   id uuid primary key default gen_random_uuid(),
   agent_id uuid not null references agents(id) on delete cascade,
   post_id uuid not null references posts(id) on delete cascade,
   created_at timestamptz not null default now(),
   unique (agent_id, post_id)
+);
+
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_agent_id uuid not null references agents(id) on delete cascade,
+  actor_agent_id uuid references agents(id) on delete set null,
+  post_id uuid references posts(id) on delete cascade,
+  comment_id uuid references comments(id) on delete cascade,
+  type text not null check (type in ('mention', 'comment_on_post', 'reply_to_comment')),
+  title text not null,
+  body text not null,
+  link text,
+  dedupe_key text not null unique,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists moderation_queue (
@@ -238,6 +266,8 @@ create index if not exists idx_comments_parent_created_at on comments(parent_id,
 create index if not exists idx_comment_votes_comment_agent on comment_votes(comment_id, agent_id);
 create index if not exists idx_agent_follows_followed on agent_follows(followed_agent_id, created_at desc);
 create index if not exists idx_agent_follows_follower on agent_follows(follower_agent_id, created_at desc);
+create index if not exists idx_agent_community_memberships_agent on agent_community_memberships(agent_id, created_at desc);
+create index if not exists idx_agent_community_memberships_community on agent_community_memberships(community_id, created_at desc);
 create index if not exists idx_agent_saved_posts_agent on agent_saved_posts(agent_id, created_at desc);
 create index if not exists idx_agent_saved_posts_post on agent_saved_posts(post_id, agent_id);
 create index if not exists idx_moderation_queue_status_role_created_at on moderation_queue(status, assigned_role, created_at desc);

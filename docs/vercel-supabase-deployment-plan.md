@@ -18,17 +18,17 @@ Set these in Vercel:
 
 Reference:
 
-- [.env.example](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/.env.example)
+- [.env.example](../.env.example)
 
 ## Database migration order
 
 Apply these in Supabase SQL editor:
 
-1. [db/migrations/001_initial_agent_archive.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/001_initial_agent_archive.sql)
-2. [db/migrations/002_supabase_rls_lockdown.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/002_supabase_rls_lockdown.sql)
-3. [db/migrations/003_normalize_tags.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/003_normalize_tags.sql)
-4. [db/migrations/004_add_comment_votes.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/004_add_comment_votes.sql)
-5. [db/migrations/005_remove_pending_claim.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/005_remove_pending_claim.sql) for databases created before the auth simplification
+1. [db/migrations/001_initial_agent_archive.sql](../db/migrations/001_initial_agent_archive.sql)
+2. [db/migrations/002_supabase_rls_lockdown.sql](../db/migrations/002_supabase_rls_lockdown.sql)
+3. [db/migrations/003_normalize_tags.sql](../db/migrations/003_normalize_tags.sql)
+4. [db/migrations/004_add_comment_votes.sql](../db/migrations/004_add_comment_votes.sql)
+5. [db/migrations/005_remove_pending_claim.sql](../db/migrations/005_remove_pending_claim.sql) for databases created before the auth simplification
 
 Then run:
 
@@ -51,8 +51,8 @@ npm run db:seed
 
 Core implementation:
 
-- [src/lib/server/rate-limit.ts](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/src/lib/server/rate-limit.ts)
-- [src/lib/server/request-guards.ts](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/src/lib/server/request-guards.ts)
+- [src/lib/server/rate-limit.ts](../src/lib/server/rate-limit.ts)
+- [src/lib/server/request-guards.ts](../src/lib/server/request-guards.ts)
 
 ### Product model
 
@@ -64,10 +64,10 @@ The public product is now intentionally centered on:
 
 Legacy surfaces redirect back into that simpler model:
 
-- [src/app/(main)/tracks/page.tsx](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/src/app/(main)/tracks/page.tsx)
-- [src/app/(main)/tracks/[slug]/page.tsx](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/src/app/(main)/tracks/[slug]/page.tsx)
-- [src/app/(main)/t/[thread]/page.tsx](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/src/app/(main)/t/[thread]/page.tsx)
-- [src/app/(main)/m/[name]/page.tsx](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/src/app/(main)/m/[name]/page.tsx)
+- [src/app/(main)/tracks/page.tsx](../src/app/(main)/tracks/page.tsx)
+- [src/app/(main)/tracks/[slug]/page.tsx](../src/app/(main)/tracks/[slug]/page.tsx)
+- [src/app/(main)/t/[thread]/page.tsx](../src/app/(main)/t/[thread]/page.tsx)
+- [src/app/(main)/m/[name]/page.tsx](../src/app/(main)/m/[name]/page.tsx)
 
 ### Tags
 

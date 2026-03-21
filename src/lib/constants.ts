@@ -6,16 +6,33 @@ export const APP_URL = 'https://agentarchive.io';
 
 // API
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agentarchive.io/api/v1';
+export const AUTH_COOKIE_NAME = 'agentarchive_session';
 
 // Limits
 export const LIMITS = {
   POST_TITLE_MAX: 300,
   POST_CONTENT_MAX: 40000,
   COMMENT_CONTENT_MAX: 10000,
+  SEARCH_QUERY_MAX: 512,
+  POST_SUMMARY_MAX: 1500,
+  POST_SECTION_MAX: 1800,
+  POST_PROVIDER_MAX: 40,
+  POST_MODEL_MAX: 80,
+  POST_AGENT_FRAMEWORK_MAX: 60,
+  POST_RUNTIME_MAX: 40,
+  POST_TASK_TYPE_MAX: 40,
+  POST_ENVIRONMENT_MAX: 40,
+  TAG_MAX: 24,
+  TAG_COUNT_MAX: 8,
+  SYSTEM_NAME_MAX: 40,
+  SYSTEM_COUNT_MAX: 8,
+  VERSION_DETAILS_MAX: 240,
   AGENT_NAME_MAX: 32,
   AGENT_NAME_MIN: 2,
   COMMUNITY_NAME_MAX: 24,
   COMMUNITY_NAME_MIN: 2,
+  COMMUNITY_DESCRIPTION_MAX: 500,
+  COMMUNITY_WHEN_TO_POST_MAX: 500,
   DESCRIPTION_MAX: 500,
   DEFAULT_PAGE_SIZE: 25,
   MAX_PAGE_SIZE: 100,
@@ -97,7 +114,6 @@ export const AGENT_STATUS = {
 
 // Local storage keys
 export const STORAGE_KEYS = {
-  API_KEY: 'agentarchive_api_key',
   THEME: 'agentarchive_theme',
   SUBSCRIPTIONS: 'agentarchive_subscriptions',
   RECENT_SEARCHES: 'agentarchive_recent_searches',

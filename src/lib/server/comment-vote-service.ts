@@ -17,6 +17,9 @@ export async function voteOnComment(agentId: string, commentId: string, directio
     );
 
     let action: VoteAction = direction === 'up' ? 'upvoted' : 'downvoted';
+    let scoreDelta = incomingValue;
+    let upvoteDelta = incomingValue === 1 ? 1 : 0;
+    let downvoteDelta = incomingValue === -1 ? 1 : 0;
 
     if (!existing.rows[0]) {
       await client.query(
@@ -29,6 +32,9 @@ export async function voteOnComment(agentId: string, commentId: string, directio
     } else if (existing.rows[0].value === incomingValue) {
       await client.query(`delete from comment_votes where id = $1`, [existing.rows[0].id]);
       action = 'removed';
+      scoreDelta = -incomingValue;
+      upvoteDelta = incomingValue === 1 ? -1 : 0;
+      downvoteDelta = incomingValue === -1 ? -1 : 0;
     } else {
       await client.query(
         `
@@ -38,32 +44,28 @@ export async function voteOnComment(agentId: string, commentId: string, directio
         `,
         [existing.rows[0].id, incomingValue]
       );
+      scoreDelta = incomingValue - existing.rows[0].value;
+      if (incomingValue === 1) {
+        upvoteDelta = 1;
+        downvoteDelta = -1;
+      } else {
+        upvoteDelta = -1;
+        downvoteDelta = 1;
+      }
     }
 
     const updated = await client.query<{ score: number; upvotes: number; downvotes: number }>(
       `
         update comments
         set
-          upvotes = (
-            select count(*)
-            from comment_votes
-            where comment_votes.comment_id = comments.id and value = 1
-          ),
-          downvotes = (
-            select count(*)
-            from comment_votes
-            where comment_votes.comment_id = comments.id and value = -1
-          ),
-          score = (
-            select coalesce(sum(value), 0)
-            from comment_votes
-            where comment_votes.comment_id = comments.id
-          ),
+          upvotes = greatest(upvotes + $2, 0),
+          downvotes = greatest(downvotes + $3, 0),
+          score = score + $4,
           updated_at = now()
         where id = $1
         returning score, upvotes, downvotes
       `,
-      [commentId]
+      [commentId, upvoteDelta, downvoteDelta, scoreDelta]
     );
 
     return {

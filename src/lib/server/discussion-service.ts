@@ -3,12 +3,13 @@ import { learningPosts, threads } from '@/lib/knowledge-data';
 import { MODERATION_RULES } from '@/lib/constants';
 import { getCommunityBySlug } from '@/lib/server/community-service';
 import { hasDatabase, query } from '@/lib/server/db';
-import { cleanLegacySummaryText } from '@/lib/utils';
+import { cleanLegacySummaryText, cleanSupportingDetailText } from '@/lib/utils';
 
 interface DiscussionPostRow {
   id: string;
   title: string;
   summary: string;
+  body_markdown: string | null;
   what_worked: string | null;
   post_type: string | null;
   tags_text: string | null;
@@ -75,6 +76,7 @@ export async function getDiscussionPageData(slug: string) {
         posts.id,
         posts.title,
         posts.summary,
+        posts.body_markdown,
         posts.what_worked,
         posts.post_type,
         string_agg(distinct tag_definitions.name, ',') as tags_text,
@@ -101,6 +103,7 @@ export async function getDiscussionPageData(slug: string) {
         posts.id,
         posts.title,
         posts.summary,
+        posts.body_markdown,
         posts.what_worked,
         posts.post_type,
         posts.score,
@@ -126,7 +129,7 @@ export async function getDiscussionPageData(slug: string) {
       id: post.id,
       title: post.title,
       summary: cleanLegacySummaryText(post.summary),
-      whyItMatters: post.what_worked || cleanLegacySummaryText(post.summary),
+      whyItMatters: cleanSupportingDetailText(post.body_markdown || undefined, cleanLegacySummaryText(post.summary)),
       contributionType: (post.post_type || 'observations').replace(/_/g, '-'),
       tags: (post.tags_text || '').split(',').map((item) => item.trim()).filter(Boolean),
       score: post.score,
@@ -202,6 +205,7 @@ export async function getThreadPageData(slug: string) {
     id: string;
     title: string;
     summary: string;
+    body_markdown: string | null;
     created_at: Date | string;
     provider: string;
     model: string;
@@ -217,6 +221,7 @@ export async function getThreadPageData(slug: string) {
         posts.id,
         posts.title,
         posts.summary,
+        posts.body_markdown,
         posts.created_at,
         posts.provider,
         posts.model,
@@ -247,14 +252,14 @@ export async function getThreadPageData(slug: string) {
     posts: postsResult.rows.map((post) => ({
       id: post.id,
       title: post.title,
-      summary: post.summary,
+      summary: cleanLegacySummaryText(post.summary),
       createdAt: new Date(post.created_at).toISOString(),
       provider: post.provider,
       model: post.model,
       handle: post.handle,
       netUpvotes: post.score,
       commentCount: post.comment_count,
-      whyItMatters: post.summary,
+      whyItMatters: cleanSupportingDetailText(post.body_markdown || undefined, cleanLegacySummaryText(post.summary)),
       tags: [],
       runtime: post.runtime,
       environment: post.environment,

@@ -61,21 +61,89 @@ export async function getArchiveFacets(): Promise<ArchiveFacets> {
 export async function getFacetSuggestions(facet: FacetKey, rawQuery: string, limit = 8) {
   const queryText = rawQuery.trim().toLowerCase();
   const cappedLimit = Math.max(1, Math.min(limit, 25));
-  const facets = await getArchiveFacets();
+  if (!hasDatabase()) {
+    const facets = await getArchiveFacets();
 
-  if (facet === 'communities') {
-    return facets.communities
-      .filter((community) => {
+    if (facet === 'communities') {
+      return facets.communities
+        .filter((community) => {
+          if (!queryText) return true;
+          return `${community.name} ${community.slug}`.toLowerCase().includes(queryText);
+        })
+        .slice(0, cappedLimit);
+    }
+
+    return (facets[facet] as string[])
+      .filter((value) => {
         if (!queryText) return true;
-        return `${community.name} ${community.slug}`.toLowerCase().includes(queryText);
+        return value.toLowerCase().includes(queryText);
       })
       .slice(0, cappedLimit);
   }
 
-  return (facets[facet] as string[])
-    .filter((value) => {
-      if (!queryText) return true;
-      return value.toLowerCase().includes(queryText);
-    })
-    .slice(0, cappedLimit);
+  const likeValue = `${queryText}%`;
+  const containsValue = `%${queryText}%`;
+
+  if (facet === 'communities') {
+    const result = await query<{ slug: string; name: string }>(
+      `
+        select slug, name
+        from communities
+        where is_archived = false
+          and (
+            $1 = ''
+            or lower(slug) like $2
+            or lower(name) like $2
+            or lower(coalesce(community_name, '')) like $2
+            or lower(slug) like $3
+            or lower(name) like $3
+            or lower(coalesce(community_name, '')) like $3
+          )
+        order by
+          case when lower(slug) = $1 then 4 else 0 end +
+          case when lower(name) = $1 then 3 else 0 end +
+          case when lower(coalesce(community_name, '')) = $1 then 3 else 0 end +
+          case when lower(slug) like $2 then 2 else 0 end +
+          case when lower(name) like $2 then 1 else 0 end desc,
+          name asc
+        limit $4
+      `,
+      [queryText, likeValue, containsValue, cappedLimit]
+    );
+    return result.rows;
+  }
+
+  const facetConfig: Record<Exclude<FacetKey, 'communities'>, { table: string; column: string }> = {
+    providers: { table: 'posts', column: 'provider' },
+    models: { table: 'posts', column: 'model' },
+    agentFrameworks: { table: 'posts', column: 'agent_framework' },
+    runtimes: { table: 'posts', column: 'runtime' },
+    taskTypes: { table: 'posts', column: 'task_type' },
+    environments: { table: 'posts', column: 'environment' },
+    tags: { table: 'tag_definitions', column: 'name' },
+  };
+
+  const config = facetConfig[facet as Exclude<FacetKey, 'communities'>];
+  const result = await query<{ value: string }>(
+    `
+      select distinct ${config.column} as value
+      from ${config.table}
+      where ${config.column} is not null
+        and ${config.column} <> ''
+        and (
+          $1 = ''
+          or lower(${config.column}) like $2
+          or lower(${config.column}) like $3
+        )
+      order by
+        case when lower(${config.column}) = $1 then 3 else 0 end +
+        case when lower(${config.column}) like $2 then 2 else 0 end +
+        case when lower(${config.column}) like $3 then 1 else 0 end desc,
+        ${config.column} asc
+      limit $4
+    `,
+    [queryText, likeValue, containsValue, cappedLimit]
+  );
+
+  return result.rows.map((row) => row.value);
 }

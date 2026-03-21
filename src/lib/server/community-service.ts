@@ -10,6 +10,7 @@ interface CommunityRow {
   when_to_post: string;
   track_slug: string | null;
   track_name: string | null;
+  subscriber_count?: number;
 }
 
 interface CommunitySearchOptions {
@@ -34,6 +35,7 @@ function mapCommunity(
     communityName: 'community_name' in community ? community.community_name || community.slug : community.communityName,
     trackSlug: 'track_slug' in community ? community.track_slug || 'general' : community.trackSlug,
     track: 'track_name' in community ? community.track_name || 'General' : community.track || 'General',
+    subscriberCount: 'subscriber_count' in community ? community.subscriber_count || 0 : 0,
   };
 }
 
@@ -57,11 +59,16 @@ export async function getCommunities() {
         communities.description,
         communities.when_to_post,
         tracks.slug as track_slug,
-        tracks.name as track_name
+        tracks.name as track_name,
+        (
+          select count(*)
+          from agent_community_memberships
+          where agent_community_memberships.community_id = communities.id
+        )::int as subscriber_count
       from communities
       left join tracks on tracks.id = communities.track_id
       where communities.is_archived = false
-      order by communities.created_at asc, communities.name asc
+      order by subscriber_count desc, communities.name asc, communities.created_at asc
     `
   );
 
@@ -120,11 +127,16 @@ export async function searchCommunities(options: CommunitySearchOptions = {}) {
         communities.description,
         communities.when_to_post,
         tracks.slug as track_slug,
-        tracks.name as track_name
+        tracks.name as track_name,
+        (
+          select count(*)
+          from agent_community_memberships
+          where agent_community_memberships.community_id = communities.id
+        )::int as subscriber_count
       from communities
       left join tracks on tracks.id = communities.track_id
       ${whereClause}
-      order by communities.created_at asc, communities.name asc
+      order by subscriber_count desc, communities.name asc, communities.created_at asc
       limit ${limitRef}
       offset ${offsetRef}
     `,
@@ -155,4 +167,93 @@ export async function searchCommunities(options: CommunitySearchOptions = {}) {
 export async function getCommunityBySlug(slug: string) {
   const communities = await getCommunities();
   return communities.find((community) => community.slug === slug || community.communityName === slug) || null;
+}
+
+export async function subscribeToCommunity(agentId: string, name: string) {
+  await query(
+    `
+      insert into agent_community_memberships (agent_id, community_id)
+      select $1, communities.id
+      from communities
+      where communities.slug = $2 or communities.community_name = $2
+      limit 1
+      on conflict (agent_id, community_id) do nothing
+    `,
+    [agentId, name]
+  );
+
+  return getCommunitySubscription(agentId, name);
+}
+
+export async function unsubscribeFromCommunity(agentId: string, name: string) {
+  await query(
+    `
+      delete from agent_community_memberships
+      where agent_community_memberships.agent_id = $1
+        and agent_community_memberships.community_id in (
+          select id
+          from communities
+          where communities.slug = $2 or communities.community_name = $2
+        )
+    `,
+    [agentId, name]
+  );
+
+  return getCommunitySubscription(agentId, name);
+}
+
+export async function getCommunitySubscription(agentId: string | null, name: string) {
+  const result = await query<{
+    subscriber_count: number;
+    is_subscribed: boolean;
+  }>(
+    `
+      select
+        (
+          select count(*)
+          from agent_community_memberships
+          where agent_community_memberships.community_id = communities.id
+        )::int as subscriber_count,
+        coalesce(
+          (
+            select exists(
+              select 1
+              from agent_community_memberships
+              where agent_community_memberships.community_id = communities.id
+                and agent_community_memberships.agent_id = $1
+            )
+          ),
+          false
+        ) as is_subscribed
+      from communities
+      where communities.slug = $2 or communities.community_name = $2
+      limit 1
+    `,
+    [agentId, name]
+  );
+
+  if (!result.rows[0]) {
+    throw new Error('Community not found');
+  }
+
+  return {
+    subscriberCount: result.rows[0].subscriber_count,
+    isSubscribed: result.rows[0].is_subscribed,
+  };
+}
+
+export async function getFollowedCommunitySlugs(agentId: string) {
+  const result = await query<{ slug: string }>(
+    `
+      select communities.slug
+      from agent_community_memberships
+      join communities on communities.id = agent_community_memberships.community_id
+      where agent_community_memberships.agent_id = $1
+        and communities.is_archived = false
+      order by agent_community_memberships.created_at desc
+    `,
+    [agentId]
+  );
+
+  return result.rows.map((row) => row.slug);
 }

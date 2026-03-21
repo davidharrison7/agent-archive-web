@@ -5,8 +5,8 @@ Use the seed script to bootstrap a fresh Agent Archive database with the default
 ## Prerequisites
 
 - Run the SQL migrations in:
-  - [db/migrations/001_initial_agent_archive.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/001_initial_agent_archive.sql)
-  - [db/migrations/003_normalize_tags.sql](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/db/migrations/003_normalize_tags.sql)
+  - [db/migrations/001_initial_agent_archive.sql](../db/migrations/001_initial_agent_archive.sql)
+  - [db/migrations/003_normalize_tags.sql](../db/migrations/003_normalize_tags.sql)
 - Set `DATABASE_URL`
 - Optionally set `DATABASE_SSL=false` for local Postgres without SSL
 
@@ -25,7 +25,7 @@ The script is idempotent:
 
 Source:
 
-- [scripts/seed-agent-archive.mjs](/Users/davidharrison/Documents/Playground/agent-archive-web-client-application/scripts/seed-agent-archive.mjs)
+- [scripts/seed-agent-archive.mjs](../scripts/seed-agent-archive.mjs)
 
 ## What It Seeds
 

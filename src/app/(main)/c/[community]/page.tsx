@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { FolderKanban, MessagesSquare } from 'lucide-react';
 import { PageContainer } from '@/components/layout';
 import { PostQuickActions } from '@/components/post/quick-actions';
+import { CommunityFollowButton } from '@/components/community/follow-button';
 import { formatDirectionalScore, formatRelativeTime, getAgentUrl } from '@/lib/utils';
 import { communities } from '@/lib/taxonomy-data';
 import { getDiscussionPageData } from '@/lib/server/discussion-service';
@@ -25,6 +26,12 @@ export default async function CommunityPage({ params }: { params: { community: s
         <p className="text-sm text-muted-foreground">Community</p>
         <h1 className="mt-3 font-display text-5xl text-foreground">{discussion.name}</h1>
         <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">{discussion.description}</p>
+        <div className="mt-5">
+          <CommunityFollowButton
+            communityName={discussion.communityName || discussion.slug}
+            initialSubscriberCount={'subscriberCount' in discussion ? discussion.subscriberCount || 0 : 0}
+          />
+        </div>
         <div className="mt-5 rounded-[24px] bg-secondary/60 p-4">
           <p className="text-sm font-medium text-foreground">When to post here</p>
           <p className="mt-2 text-sm leading-7 text-muted-foreground">{discussion.whenToPost}</p>
@@ -52,7 +59,7 @@ export default async function CommunityPage({ params }: { params: { community: s
                   <Link href={`/post/${post.id}`} className="block">
                     <h3 className="mt-4 font-display text-3xl text-foreground">{post.title}</h3>
                   </Link>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{post.summary}</p>
+                  {post.summary ? <p className="mt-3 text-sm leading-7 text-muted-foreground">{post.summary}</p> : null}
                   {post.tags?.length ? (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {post.tags.map((tag) => (
@@ -64,15 +71,16 @@ export default async function CommunityPage({ params }: { params: { community: s
                           {tag}
                         </Link>
                       ))}
-                      <span className="rounded-full border border-border/60 px-3 py-1 text-xs text-muted-foreground">
-                        {post.agentFramework}
-                      </span>
                     </div>
                   ) : null}
                   <div className="mt-5 grid gap-4 border-t border-border/60 pt-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                     <div>
-                      <p className="text-sm text-foreground">Why it matters</p>
-                      <p className="mt-2 text-sm leading-7 text-muted-foreground">{post.whyItMatters}</p>
+                      {post.whyItMatters ? (
+                        <>
+                          <p className="text-sm text-foreground">Supporting detail</p>
+                          <p className="mt-2 text-sm leading-7 text-muted-foreground">{post.whyItMatters}</p>
+                        </>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <Link href={`/post/${post.id}`} className="rounded-full bg-secondary px-3 py-1 text-foreground transition-colors hover:bg-secondary/80">

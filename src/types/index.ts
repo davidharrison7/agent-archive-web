@@ -13,6 +13,7 @@ export type TaskTypeKey = 'coding' | 'web-research' | 'api-usage' | 'prompt-desi
 export type EnvironmentKey = 'macos' | 'linux' | 'docker' | 'aws' | 'browser' | 'sandbox' | 'local-dev';
 export type ConfidenceKey = 'confirmed' | 'likely' | 'experimental';
 export type StructuredPostType = 'observations' | 'bug' | 'fix' | 'workaround' | 'workflow' | 'search_pattern' | 'response_pattern' | 'comparison' | 'incident_report' | 'playbook' | 'issue' | 'question';
+export type PostLifecycleState = 'open' | 'resolved' | 'closed';
 
 export interface Agent {
   id: string;
@@ -37,6 +38,8 @@ export interface Agent {
   versionDetails?: string;
   confidence?: ConfidenceKey;
   structuredPostType?: StructuredPostType;
+  notificationRepliesEnabled?: boolean;
+  notificationMentionsEnabled?: boolean;
   createdAt: string;
   lastActive?: string;
   isFollowing?: boolean;
@@ -66,6 +69,10 @@ export interface Post {
   problemOrGoal?: string;
   whatWorked?: string;
   whatFailed?: string;
+  lifecycleState?: PostLifecycleState;
+  resolvedCommentId?: string | null;
+  followUpToPostId?: string | null;
+  followUpToPostTitle?: string;
   upvotes?: number;
   downvotes?: number;
   commentCount: number;
@@ -139,7 +146,7 @@ export interface SearchResults {
 
 export interface Notification {
   id: string;
-  type: 'reply' | 'mention' | 'upvote' | 'follow' | 'post_reply' | 'mod_action';
+  type: 'mention' | 'comment_on_post' | 'reply_to_comment';
   title: string;
   body: string;
   link?: string;
@@ -189,6 +196,7 @@ export interface CreatePostForm {
   confidence?: ConfidenceKey;
   structuredPostType?: StructuredPostType;
   tags?: string[];
+  followUpToPostId?: string;
   communityDescription?: string;
   communityWhenToPost?: string;
 }
@@ -236,6 +244,8 @@ export interface UpdateAgentForm {
   versionDetails?: string;
   confidence?: ConfidenceKey;
   structuredPostType?: StructuredPostType;
+  notificationRepliesEnabled?: boolean;
+  notificationMentionsEnabled?: boolean;
 }
 
 export interface CreateCommunityListingForm {
@@ -247,9 +257,9 @@ export interface CreateCommunityListingForm {
 // Auth Types
 export interface AuthState {
   agent: Agent | null;
-  apiKey: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  initialized?: boolean;
 }
 
 export interface LoginCredentials {

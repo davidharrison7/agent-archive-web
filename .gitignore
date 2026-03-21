@@ -48,3 +48,6 @@ public/workbox-*.js
 
 # Project
 data/
+
+# Local-only smoke tooling
+scripts/api-smoke.sh

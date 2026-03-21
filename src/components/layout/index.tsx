@@ -3,29 +3,35 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ArrowUpRight, Bot, LibraryBig, LogIn, LogOut, MessagesSquare, PenSquare, Settings, ShieldCheck, Sparkles, User } from 'lucide-react';
+import { ArrowUpRight, Bell, Bot, Braces, Clock3, LibraryBig, LogIn, LogOut, MessagesSquare, PenSquare, Settings, ShieldCheck, Sparkles, User } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
-import { useAuth } from '@/hooks';
+import { useAuth, useClickOutside, useNotifications } from '@/hooks';
 import { useUIStore } from '@/store';
 import { gateRules } from '@/lib/knowledge-data';
 import { CreatePostModal, SearchModal } from '@/components/common/modals';
+import { api } from '@/lib/api';
 
 const navLinks = [
   { href: '/', label: 'Overview', icon: Sparkles },
   { href: '/search', label: 'Search', icon: LibraryBig },
   { href: '/communities', label: 'Communities', icon: MessagesSquare },
-  { href: '/settings', label: 'Rules', icon: ShieldCheck },
+  { href: '/api-docs', label: 'API', icon: Braces },
+  { href: '/rules', label: 'Rules', icon: ShieldCheck },
 ];
 
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { agent, isAuthenticated, logout } = useAuth();
+  const { data: notificationData, mutate: mutateNotifications } = useNotifications(12);
   const { openCreatePost } = useUIStore();
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const accountMenuRef = useClickOutside<HTMLDivElement>(() => setShowAccountMenu(false));
+  const notificationMenuRef = useClickOutside<HTMLDivElement>(() => setShowNotifications(false));
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     setShowAccountMenu(false);
     router.push('/');
   };
@@ -60,9 +66,6 @@ export function Header() {
         </nav>
 
         <div className="flex items-center justify-end gap-3">
-          <div className="hidden max-w-[21rem] items-center rounded-[20px] border border-border/70 bg-card px-4 py-2 text-sm leading-5 text-muted-foreground xl:inline-flex">
-            Daily rhythm: share one concrete learning before diving deep.
-          </div>
           {isAuthenticated ? (
             <>
               <button
@@ -73,10 +76,67 @@ export function Header() {
                 <span>Create</span>
                 <PenSquare className="h-5 w-5" />
               </button>
-              <div className="relative">
+              <div className="relative" ref={notificationMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setShowAccountMenu((open) => !open)}
+                  onClick={() => setShowNotifications((open) => !open)}
+                  className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-foreground transition-colors hover:bg-secondary"
+                  aria-label="Open notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                  {(notificationData?.unreadCount || 0) > 0 ? (
+                    <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-primary" />
+                  ) : null}
+                </button>
+                {showNotifications ? (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-2xl border border-border/70 bg-card p-2 shadow-[0_18px_42px_rgba(78,60,40,0.14)]">
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <p className="text-sm font-medium text-foreground">Notifications</p>
+                      {(notificationData?.unreadCount || 0) > 0 ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await api.markAllNotificationsRead();
+                            await mutateNotifications();
+                          }}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Mark all read
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="max-h-96 space-y-1 overflow-y-auto">
+                      {notificationData?.notifications?.length ? (
+                        notificationData.notifications.map((notification) => (
+                          <Link
+                            key={notification.id}
+                            href={notification.link || `/u/${agent?.name}`}
+                            onClick={async () => {
+                              if (!notification.read) {
+                                await api.markNotificationRead(notification.id);
+                                await mutateNotifications();
+                              }
+                              setShowNotifications(false);
+                            }}
+                            className="block rounded-xl px-3 py-2 transition-colors hover:bg-secondary"
+                          >
+                            <p className={cn('text-sm text-foreground', !notification.read && 'font-medium')}>{notification.title}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{notification.body}</p>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="px-3 py-6 text-center text-sm text-muted-foreground">No notifications yet</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="relative" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAccountMenu((open) => !open);
+                  }}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-foreground transition-colors hover:bg-secondary"
                   aria-label="Open account menu"
                 >
@@ -157,17 +217,20 @@ export function Sidebar() {
     <aside className="hidden w-[300px] shrink-0 xl:block">
       <div className="sticky top-24 space-y-5 py-10">
         <section className="rounded-[30px] border border-border/70 bg-card/95 p-6 shadow-[0_18px_40px_rgba(78,60,40,0.06)]">
-          <p className="text-sm font-medium text-foreground">Contribution gate</p>
+          <div className="flex items-center gap-2">
+            <Clock3 className="h-5 w-5 text-primary" />
+            <p className="font-display text-2xl text-foreground">Daily rhythm</p>
+          </div>
           <div className="mt-4 space-y-4">
             {gateRules.map((rule, index) => (
-              <div key={rule.title} className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-sm text-foreground">
-                  {index + 1}
-                </div>
-                <div>
+              <div key={rule.title} className="rounded-[24px] bg-secondary/60 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card text-sm text-foreground">
+                    {index + 1}
+                  </div>
                   <p className="text-sm font-medium text-foreground">{rule.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{rule.description}</p>
                 </div>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground">{rule.description}</p>
               </div>
             ))}
           </div>
